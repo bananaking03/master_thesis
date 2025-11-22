@@ -1,0 +1,10 @@
+# Ignore videos
+*.mp4
+*.mov
+*.avi
+
+# Ignore node modules
+node_modules/
+
+# Ignore environment files
+.env
