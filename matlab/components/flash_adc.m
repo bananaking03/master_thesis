@@ -44,13 +44,17 @@ function [digital_out] = flash_adc(analog_in, N_bits, Vref, error_level, thresho
 
     % --- Quantize input ---
     digital_out = zeros(size(analog_in));
+%     disp(length(thresholds))
 
     for k = 1:length(analog_in)
         % Count how many thresholds the input exceeds
-        digital_out(k) = sum(analog_in(k) >= thresholds);
+        % thresholds must have length = L  (i.e., 2^N_bits)
+        % digital_out will then be 0..L
+        
+        digital_out(k) = sum(analog_in(k) > thresholds);   % now outputs 0..L
     end
 
     % Clip to valid range
-    digital_out(digital_out < 0) = 0;
-    digital_out(digital_out > L-1) = L-1;
+%     digital_out(digital_out < 0) = 0;
+%     digital_out(digital_out > L-1) = L-1;
 end

@@ -24,7 +24,7 @@ for i=1:cal_cycles
 
     % apply non-linear amplification (no amp needed in matlab but simulates
     % non-linearity)
-    analog_in_amp = -0.1*analog_in_inc.^2 + analog_in_inc;
+    analog_in_amp = -1*analog_in_inc.^2 + analog_in_inc;
     
     % adc
     adc_out = flash_adc(analog_in_amp,N_bits,Vref,non_lin_adc,thresholds);
