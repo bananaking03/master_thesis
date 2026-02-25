@@ -15,7 +15,7 @@ L = 2^N_bits;
 Vinc = (Vhigh-Vlow) / L; % 1 LSB test meer dither grootes-----------------
 
 % cal_lens = [10 100 1000 10000 100000 1000000];
-cal_lens = logspace(3, 5.2, 10)';
+cal_lens = logspace(4, 9, 10)';
 
 to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
 
@@ -37,34 +37,36 @@ noisy = sort(noisy);
 % now RE-MAP them to preserve spacing
 noisy = interp1(ideal_thresholds, noisy, ideal_thresholds, 'linear', 'extrap');
 
-init_thresholds = noisy;
-
 % Preallocate storage
 num_cases = length(cal_lens);
 thresholds = zeros(L-1, (cal_cycles+1)*num_cases);
 H_delta_diff_history = zeros(L-1, (cal_cycles)*num_cases);
 SNDRs = zeros(num_cases,1);
 
+% Create input vector (simulate same analog input for all)
+cal_len_max = max(cal_lens);
+% t = (0:1/fs:cal_len_max/fs*cal_cycles)';
+% analog_in = 0.5 + 0.5*sin(2*pi*20*t);
+t = (0:1/fs:(cal_len_max-1)/fs)';
+analog_in = sin(2*pi*20*t);
+% analog_in = mod(t,1);
+
 % Run calibration for each calibration length
 for i = 1:num_cases
     cal_len = cal_lens(i);
-    cal_constant = 10^-6;
-    
-    t = (0:1/fs:(round(cal_len)-1)/fs)';
-    analog_in = sin(2*pi*f0*t);
+    cal_constant = (160*(10^-6))/(40000-0.005*(40000-cal_len));
     
     % Call your calibration function
-    [digi_out, thr, H_delta_diffs] = flash_adc_dither_sim(analog_in, cal_len, cal_cycles, ...
+    [digi_out, thr, H_delta_diffs] = flash_adc_dither_sim(analog_in(1:i), cal_len, cal_cycles, ...
         cal_constant, 0,init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters);
     
-    SNDRs(i) = calculate_SNDR(digi_out(:),analog_in,N);
+    SNDRs(i) = calculate_SNDR(digi_out(:,cal_cycles),analog_in,N);
     if (i==1)
         a = digi_out;
-        H_delta_diff_history = H_delta_diffs;
     end
 
     thresholds(:, (i-1)*(cal_cycles+1)+1:i*(cal_cycles+1)) = thr; % store final thresholds
-    % H_delta_diff_history(:, (i-1)*(cal_cycles+1)+1:i*(cal_cycles+1)-1) = H_delta_diffs;
+    H_delta_diff_history(:, (i-1)*(cal_cycles+1)+1:i*(cal_cycles+1)) = H_delta_diffs;
 end
 
 figure;
@@ -92,7 +94,6 @@ legend(arrayfun(@(x) sprintf('Cal Len = %d', x), cal_lens, 'UniformOutput', fals
 grid on;
 
 %% === Plot 1: Differences between adjacent thresholds over time ===
-tau = zeros(num_cases,1);
 figure('Color','w');
 for i = 1:num_cases
     subplot(2, ceil(num_cases/2), i);
@@ -117,35 +118,12 @@ for i = 1:num_cases
     spread = std(deltaT); % standard deviation of ΔT per iteration
     plot(0:cal_cycles, spread, 'LineWidth', 1.8, ...
         'DisplayName', sprintf('Cal Len = %d', cal_lens(i)));
-
-    % calculate convergence speed
-    n = 1:cal_cycles;
-
-    spread_inf = mean(spread(end-100:end));   % steady-state estimate
-    y = abs(spread(2:end) - spread_inf);              % remove offset
-
-    % remove zeros to avoid log issues
-    valid = y > 0;
-    n_fit = n(valid);
-    y_fit = y(valid);
-    
-    p = polyfit(n_fit, log(y_fit), 1);
-    
-    tau(i) = -cal_lens(i)/p(1);   % convergence time constant
 end
 xlabel('Calibration Iteration');
 ylabel('Std of Adjacent ΔThresholds (V)');
 title('Convergence of Threshold Spacing');
 legend('Location', 'northeast');
 grid on;
-
-figure;
-semilogx(cal_lens,tau, '*');
-hold on;
-xlabel('Calibration length');
-ylabel('cycles to convergence');
-title('Convergence speed (cal_len = 10^-6');
-hold off;
 
 % Optional: compare histograms of final digital outputs
 %% --- Plot 1: Threshold evolution for each calibration length ---
@@ -193,10 +171,9 @@ legend('Location', 'northeast');
 grid on;
 
 %% --- Animation Setup ---
-case_to_show = 5; % choose which calibration length to animate (index in cal_lens)
+case_to_show = 1; % choose which calibration length to animate (index in cal_lens)
 block = thresholds(:, (case_to_show-1)*(cal_cycles+1)+1 : case_to_show*(cal_cycles+1));
-% block_H = H_delta_diff_history(:,(case_to_show-1)*(cal_cycles)+1:case_to_show*(cal_cycles));
-block_H = H_delta_diff_history;
+block_H = H_delta_diff_history(:,(case_to_show-1)*(cal_cycles)+1:case_to_show*(cal_cycles));
 
 figure('Color','w');
 tiledlayout(1,2);

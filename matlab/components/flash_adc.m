@@ -1,4 +1,4 @@
-function [digital_out] = flash_adc(analog_in, N_bits, Vref, error_level, thresholds)
+function [digital_out] = flash_adc(analog_in, N_bits, Vhigh, Vlow, thresholds)
 % FLASH_ADC Simulates a Flash ADC with non-linearities.
 %
 %   [digital_out, thresholds] = flash_adc(analog_in, N_bits, Vref, error_level)
@@ -18,8 +18,6 @@ function [digital_out] = flash_adc(analog_in, N_bits, Vref, error_level, thresho
 %       x = 0.5 + 0.4*sin(2*pi*5*t);
 %       [d, thr] = flash_adc(x, 8, 1, 0.05);
 %       plot(t, x, t, d/255);
-%
-%   (c) 2025 GPT-5 ADC Modeling Toolkit
 
     % --- Input checks ---
     if nargin < 4
@@ -29,22 +27,9 @@ function [digital_out] = flash_adc(analog_in, N_bits, Vref, error_level, thresho
 
     % --- Ideal ADC step size ---
     L = 2^N_bits;
-%     ideal_thresholds = linspace(0, Vref, L+1); % L+1 edges (including endpoints)
-%     ideal_thresholds = ideal_thresholds(2:end-1); % remove 0 and Vref (for comparators)
-
-%     thresholds = ideal_thresholds;
-    % --- Introduce DNL/INL errors ---
-    % DNL errors: small random step variations
-%     dnl = error_level * (randn(size(ideal_thresholds)) * (Vref / L));
-%     thresholds = ideal_thresholds + cumsum(dnl);
-% 
-%     % Keep thresholds monotonic (simulate realistic ADC behavior)
-%     thresholds = sort(thresholds);
-%     thresholds = max(min(thresholds, Vref), 0);
 
     % --- Quantize input ---
     digital_out = zeros(size(analog_in));
-%     disp(length(thresholds))
 
     for k = 1:length(analog_in)
         % Count how many thresholds the input exceeds
@@ -52,6 +37,8 @@ function [digital_out] = flash_adc(analog_in, N_bits, Vref, error_level, thresho
         % digital_out will then be 0..L
         
         digital_out(k) = sum(analog_in(k) > thresholds);   % now outputs 0..L
+
+        digital_out(k) = digital_out(k) + (analog_in(k) > Vhigh); % may need removal
     end
 
     % Clip to valid range

@@ -1,0 +1,117 @@
+clear; close all; clc;
+% change to differantial system!!!!! Check distortie
+Vhigh = 1;
+Vlow = -1;
+N_bits =10; % probeer meer bits
+cal_cycles = 100;
+N = 2048*2^-3; % fft size
+fs = 48000;  % coherent sampling
+f0 = (13/N)*fs;
+% f0 = 990;
+non_lin_parameters = [0 1 0];
+cal_len = 40000;  % need increase for more bits
+cal_cutoff = 0;
+
+save_video = true;
+
+L = 2^N_bits;
+Vinc = (Vhigh - Vlow) / L; % 1 LSB
+% cal_const = 10^(-6);
+cal_const = 3*10^(-6);
+
+to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
+
+% % % --- Create ideal thresholds ---
+ideal_thresholds = linspace(Vlow, Vhigh, L+1)';
+ideal_thresholds = ideal_thresholds(2:end-1);
+
+% Initialize thresholds
+init_thresholds = linspace(Vlow, Vhigh, L+1)'; % L+1 edges
+init_thresholds(4) = init_thresholds(4) + Vinc*0.9;
+init_thresholds = init_thresholds(2:end-1); % remove 0 and Vref
+% noise added around each threshold independently
+% noise_amp = 40 * Vinc;
+noise_amp = 0 * Vinc;
+noisy = ideal_thresholds + noise_amp*(2*rand(size(ideal_thresholds))-1);
+
+% but ensure thresholds remain sorted and equally spaced on average
+noisy = sort(noisy);
+
+% now RE-MAP them to preserve spacing
+noisy = interp1(ideal_thresholds, noisy, ideal_thresholds, 'linear', 'extrap');
+
+init_thresholds = noisy;
+
+% Preallocate storage
+num_cases = length(cal_const);
+thresholds = zeros(L-1, (cal_cycles+1)*num_cases);
+H_delta_diff_history = zeros(L-1, (cal_cycles)*num_cases);
+% err = zeros(num_cases,1);
+SNDRs = zeros(cal_cycles,1);
+
+% analog_in = 0.5 + 0.5*sin(2*pi*20*t);
+t = (0:1/fs:(cal_len-1)/fs)';
+analog_in =sin(2*pi*f0*t);
+% analog_in = mod(t,1);
+
+[ideal_digi_out] = flash_adc(analog_in,N_bits,Vhigh,Vlow,ideal_thresholds);
+
+[initial_digi_out] = flash_adc(analog_in,N_bits,Vhigh,Vlow,init_thresholds);
+
+% Run calibration for each calibration length
+    
+% Call your calibration function
+[digi_out, thr, H_delta_diffs] = flash_adc_dither_sim(analog_in, cal_len, cal_cycles, ...
+    cal_const, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters);
+
+for i = 1:cal_cycles
+    SNDRs(i) = calculate_SNDR(digi_out(:,i),analog_in,N);
+end
+
+figure;
+plot(SNDRs)
+xlabel('Calibration cycle'); ylabel('SNDR');
+
+figure;
+dbFloor = 0;                % Baseline level for all spectra
+SNDR_plot = bar(nan,nan,0.05,'FaceColor','r','EdgeColor','r', 'LineWidth', 0.1,'FaceAlpha',0.7,'BaseValue',dbFloor);;
+title('Frequency Domain – Harmonics at 2f, 3f, …');
+xlabel('Frequency (Hz)'); ylabel('Magnitude (dB)');
+% xlim([0 5000]); 
+ylim([dbFloor 60]);
+ylabel('Magnitude (dB)');
+legend('Input','Output');
+grid on;
+
+if save_video
+    vid = VideoWriter('fft.mp4', 'MPEG-4');
+    vid.FrameRate = 120;
+    open(vid);
+end
+
+for i = 1:cal_cycles
+    %% --- Plot frequency response
+    % FFT
+    Nfft = 1*N;
+    win    = hann(N)';            % Hann window
+    Wnorm  = sum(win) / N;        % Normalize amplitude for window loss
+    dbFloor = 0;                % Baseline level for all spectra
+    fft_db = @(x) max( to_dB( fft(x, Nfft)), dbFloor );
+    % fft_in  = fft_db(analog_in(1:end)');
+    fft_out = fft_db((digi_out(:,i)'-L/2)/(L/2));
+    f = (0:Nfft-1)*(fs/Nfft);
+    
+    % bar(f(1:Nfft/2), fft_in(1:Nfft/2),0.05,'FaceColor','b','EdgeColor','b', 'LineWidth', 0.8,'BaseValue',dbFloor); hold on;
+    % bar(f(1:Nfft/2), fft_out(1:Nfft/2),0.05,'FaceColor','r','EdgeColor','r', 'LineWidth', 0.1,'FaceAlpha',0.7,'BaseValue',dbFloor);
+    set(SNDR_plot,'XData', f(1:Nfft/2), 'YData', fft_out(1:Nfft/2));
+
+    drawnow;
+    if save_video
+        writeVideo(vid, getframe(gcf));
+    end
+end
+
+if save_video
+    close(vid);
+    disp('✅ Saved animation as fft.mp4');
+end
