@@ -3,13 +3,13 @@ clear; close all; clc;
 Vhigh = 1;
 Vlow = -1;
 N_bits =8; % probeer meer bits
-cal_cycles = 500000;
+cal_cycles = 50000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
 f1 = (15.24532/N)*fs;
 non_lin_parameters = [0 1 0];
-cal_len = 8000;  % need increase for more bits
+cal_len = 5*10^4;  % need increase for more bits
 % cal_len = 10000
 % cal_len = 10001
 % N = 2048*2^4; % fft size
@@ -24,7 +24,7 @@ Vinc = 1 * LSB;
 
 % cal_consts = [8*10^(-5) 9*10^(-5) 10^(-4) 2*10^(-4) 3*10^(-4) 4*10^(-4)];
 % cal_consts = [10^(-3) 10^(-4) 10^(-5) 10^(-6) 10^(-7) 10^(-8)];
-cal_consts = logspace(-2, -7, 12)';
+cal_consts = logspace(1, -5, 12)';
 % cal_consts = [10^-9];
 
 to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
@@ -35,8 +35,7 @@ ideal_thresholds = ideal_thresholds(2:end-1);
 
 % Initialize thresholds
 init_thresholds = linspace(Vlow, Vhigh, L+1)'; % L+1 edges
-init_thresholds(30) = init_thresholds(30) + Vinc*0.9;
-% init_thresholds(4) = init_thresholds(4) + Vinc*0.9;
+init_thresholds(4) = init_thresholds(4) + Vinc*0.9;
 init_thresholds = init_thresholds(2:end-1); % remove 0 and Vref
 % noise added around each threshold independently
 noise_amp = 10 * Vinc;
@@ -61,7 +60,6 @@ converge_times = zeros(num_cases,1);
 % analog_in = 0.5 + 0.5*sin(2*pi*20*t);
 t = (0:1/fs:(cal_len-1)/fs)';
 analog_in =sin(2*pi*f1*t);
-analog_in = -1 + 2*rand(cal_len, 1);
 % analog_in = mod(t,1);
 
 t = (0:1/fs:(cal_len-1)/fs)';
@@ -155,7 +153,7 @@ figure;
 yyaxis left
 semilogx(cal_consts, SNDRs_cases, '*','MarkerSize',12);
 hold on
-semilogx(cal_consts, SNDRs_cases_max, '*','MarkerSize',12,'Color',[0.7 0 1 0.3]);
+semilogx(cal_consts, SNDRs_cases_max, '*','MarkerSize',12);
 semilogx(const_vals, SNDR, 'LineWidth', 2,'Color',[0 0 1 0.3]);
 yline(calculate_SNDR(initial_digi_out,analog_in2,N), '--r', 'initial SNDR');
 yline(calculate_SNDR(ideal_digi_out,analog_in2,N), '--r', 'ideal SNDR');
@@ -167,7 +165,7 @@ grid on;
 
 yyaxis right
 semilogx(cal_consts, converge_times, '.','MarkerSize',12);
-semilogx(const_vals, converge_times_math, 'Linewidth',2,'Color',[255/255 165/255 0 0.3]);
+semilogx(N_vals, converge_times_math, 'Linewidth',2,'Color',[255/255 165/255 0 0.3]);
 ylabel('Convergence time (amount of cycles)')
 set(gca, 'YScale', 'log')   % <-- THIS makes right axis logarithmic
 set(gcf, 'Color', 'white')

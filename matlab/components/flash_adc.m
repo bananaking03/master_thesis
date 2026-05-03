@@ -26,20 +26,23 @@ function [digital_out] = flash_adc(analog_in, N_bits, Vhigh, Vlow, thresholds)
     analog_in = analog_in(:); % force column vector
 
     % --- Ideal ADC step size ---
-    L = 2^N_bits;
+    % L = 2^N_bits;
 
     % --- Quantize input ---
-    digital_out = zeros(size(analog_in));
+    % digital_out = zeros(size(analog_in));
 
-    for k = 1:length(analog_in)
-        % Count how many thresholds the input exceeds
-        % thresholds must have length = L  (i.e., 2^N_bits)
-        % digital_out will then be 0..L
-        
-        digital_out(k) = sum(analog_in(k) > thresholds);   % now outputs 0..L
+    % for k = 1:length(analog_in)
+    %     % Count how many thresholds the input exceeds
+    %     % thresholds must have length = L  (i.e., 2^N_bits)
+    %     % digital_out will then be 0..L
+    % 
+    %     digital_out(k) = sum(analog_in(k) > thresholds);   % now outputs 0..L
+    % 
+    %     digital_out(k) = digital_out(k) + (analog_in(k) > Vhigh); % may need removal
+    % end
 
-        digital_out(k) = digital_out(k) + (analog_in(k) > Vhigh); % may need removal
-    end
+    digital_out = sum(analog_in > thresholds.', 2);
+    % digital_out = digital_out + (analog_in > Vhigh);
 
     % Clip to valid range
 %     digital_out(digital_out < 0) = 0;

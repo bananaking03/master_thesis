@@ -1,0 +1,30 @@
+cal_len = 5000
+N = 5000;
+
+
+% analog_in = 0.5 + 0.5*sin(2*pi*20*t);
+t = (0:1/fs:(cal_len-1)/fs)';
+analog_in =sin(2*pi*f1*t);
+
+SNDRs = zeros(12,1001);
+
+figure;
+hold on;
+grid on;
+xlabel('Mismatch LSC');
+ylabel('SNDR (dB)');
+title('SNDR vs Mismatch LSC for Varying N_bits');
+for N_bits = 1:12
+    for mismatch_LSC = 0:0.001:1
+        % Create the caps
+        caps = derrive_caps(N_bits,mismatch_LSC,LSC);
+        
+        % thresholds from caps
+        init_thresholds = cap_to_thr(caps(1:N_bits+1),Vlow,Vhigh);
+        
+        [initial_digi_out] = flash_adc(analog_in,N_bits,Vhigh,Vlow,init_thresholds);
+
+        SNDRs(N_bits,mismatch_LSC*1000) = calculate_SNDR(initial_digi_out,analog_in,N);
+    end
+    plot(0:0.001:1,SNDRs(N_bits,:));
+end

@@ -1,23 +1,15 @@
-function [digi_out, threshold_history, H_delta_diff_history] = flash_adc_dither_sim(input, cal_len, cal_cycles, cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow,  Vinc, N_bits, non_lin_f)
+function [digi_out, SNDRs] = SAR_adc_dither_sim(input, cal_len, cal_cycles, ...
+        cal_constant, cal_cutoff, init_thresholds, pos_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,N, input2)
+%SAR_ADC Summary of this function goes here
+%   Detailed explanation goes here
 
 L = 2^N_bits;
-H_delta_diff_history = zeros(L-1, cal_cycles);
-thresholds = [init_thresholds; Vhigh];   % append final overflow threshold
-threshold_history = zeros(L-1, cal_cycles+1);
-threshold_history(:,1) = init_thresholds;
-% digi_out = zeros(cal_len*cal_cycles,1);
+thresholds = init_thresholds;   % append final overflow threshold
 cal_len = round(cal_len);
-disp(cal_len)
-disp(cal_cycles)
-% digi_out = zeros(cal_len,cal_cycles);
-nonlin_fun = @(x) polyval(fliplr(non_lin_f),x);
-
-% discretisize thresholds
-LSB_value = 10^-8;
+nonlin_fun = @(x) polyval(fliplr(non_lin_parameters),x);
+SNDRs = zeros(cal_cycles,1);
 
 for i=1:cal_cycles
-    thresholds = LSB_value * round(thresholds/LSB_value);
-%     analog_in = input((i-1)*cal_len+1:(i)*cal_len);
     analog_in = input;
     D = randi([0 1], cal_len,1);
     
@@ -30,7 +22,7 @@ for i=1:cal_cycles
 %     figure
 %     plot(analog_in_amp)
 %     xlim([0 10000])
-    analog_in_amp = rescale(analog_in_amp,min(analog_in_inc),max(analog_in_inc));
+    % analog_in_amp = rescale(analog_in_amp,min(analog_in_inc),max(analog_in_inc));
     
     % adc
     adc_out = flash_adc(analog_in_amp,N_bits,Vhigh,Vlow,thresholds(1:end));
@@ -39,12 +31,11 @@ for i=1:cal_cycles
     
     % create digital output
 %     digi_out((i-1)*cal_len+1:i*cal_len) = adc_out - D;
-    digi_out(:,i) = adc_out - D;
-    out = digi_out(:,i);
+    digi_out = adc_out - D;
     
     % seperate incremented values and non-incremented values
-    D_plus = out(D == 1);
-    D_min = out(D == 0);
+    D_plus = digi_out(D == 1);
+    D_min = digi_out(D == 0);
     
     % Compute histogram counts for each integer in range, one extra bin at
     % the end which gets discarded due to overflow
@@ -95,11 +86,11 @@ for i=1:cal_cycles
 %     title('Histogram from H\_delta');
 
    % Update thresholds to reduce nonlinearity
-   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)') > cal_cutoff) .* cal_constant.*H_delta(1:end-1)')./cal_len;
+   thresholds(1:end-1) = thresholds(1:end-1) + (abs(H_delta(1:end-1)') > cal_cutoff) .* cal_constant.*H_delta(1:end-1)';
 
    % --- Enforce monotonic thresholds (prevent crossing) ---
     % Minimum spacing between thresholds
-    min_step = 1e-6;  % you can adjust this value as needed
+    min_step = 1e-10;  % you can adjust this value as needed
     
     for k = 2:length(thresholds)-1
         if thresholds(k) <= thresholds(k-1)
@@ -113,12 +104,17 @@ for i=1:cal_cycles
     thresholds = max(thresholds, Vlow);
     thresholds(end) = Vhigh;  % maintain top reference
 
-   % Save thresholds for visualization
-   threshold_history(:, i+1) = thresholds(1:end-1);
+    % round thresholds to nearest possible threshold
+    [~, idx] = min(abs(pos_thresholds(:) - thresholds(:).'), [], 1);
+    thresholds = pos_thresholds(idx);
 
-   % Save histograms for visualization
-   H_delta_diff_history(:,i+1) = H_delta(1:end-1)';
-
+    digi_out2 = flash_adc(input2,N_bits,Vhigh,Vlow,thresholds(1:end));
+    
+    if cal_len >= 10000
+        SNDRs(i) = calculate_SNDR(digi_out2(end - 10000:end), input2(end - 10000:end),N);
+    else
+        SNDRs(i) = calculate_SNDR(digi_out2(end - cal_len:end), input2(end - cal_len:end),N);
+    end
 %    figure
 %    plot(thresholds)
 %    title('thresholds')
@@ -137,4 +133,3 @@ for i=1:cal_cycles
 end
 
 end
-

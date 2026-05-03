@@ -16,6 +16,10 @@ function sndr_dB = calculate_SNDR(x_adc,x_in,N)
     % FFT
     X_adc = fft(x_adc,N) / N;
     X_in  = fft(x_in,N) / N;
+    % figure;
+    % bar(X_adc);
+    % figure;
+    % bar(X_in);
 
     % Single-sided spectrum
     X_adc = X_adc(1:(N-1)/2);
