@@ -2,6 +2,7 @@
 *.mp4
 *.mov
 *.avi
+*.mat
 
 # Ignore node modules
 node_modules/
