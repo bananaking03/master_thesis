@@ -1,0 +1,104 @@
+clear; close all; clc;
+% change to differantial system!!!!! Check distortie
+Vhigh = 1;
+Vlow = -1;
+N_bits =7; % probeer meer bits (interplate 3/4)
+% N_bits_algo = 8;
+N_bits_algo = 7;
+N_bits_extra = 5;
+cal_cycles =  50000;
+N = (2048*2^-3) - 1; % fft size
+fs = 48000;  % coherent sampling
+f0 = (13/N)*fs;
+f1 = (15.24532/N)*fs;
+non_lin_parameters = [0 1 0 0];
+% cal_len = 10000000/(2^5);  % need increase for more bits
+% cal_len = 10000
+% cal_len = 10001
+% N = 2048*2^4; % fft size
+analyze_spesific = 1;
+cal_cutoff = 0;
+% cal_constant = 0.1;
+cal_constant = 0.1;
+cal_len = 1000000;
+% cal_len = 5000;
+cap_tot = 10^-12;
+
+L = 2^N_bits;
+L_algo = 2^N_bits_algo;
+L_tot = 2^(N_bits+N_bits_extra);
+LSB = (Vhigh - Vlow) / L_algo;
+Vinc = 1 * LSB;
+
+% derrive LSC0
+LSC0 = cap_tot/L_tot;
+
+% derrive mismatch
+A_vt = 2*10^-5; % technology constant
+cap_dens = 1; % F per m^2
+AreaLSC = LSC0/cap_dens;
+sigmaLSC = A_vt*LSC0/sqrt(AreaLSC);
+mismatch_LSC0 = A_vt/sqrt(AreaLSC);
+
+to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
+
+% % % --- Create ideal thresholds ---
+ideal_thresholds = linspace(Vlow, Vhigh, L+1)';
+ideal_thresholds = ideal_thresholds(2:end-1);
+
+%% create possible thresholds
+% capacitors
+caps = derrive_caps_unary(2^(N_bits+N_bits_extra),mismatch_LSC0, LSC0);
+
+% thresholds
+pos_thresholds = cap_to_thr_unary(caps,Vlow,Vhigh);
+ideal_pos_thresholds = linspace(Vlow,Vhigh,L_tot+1).';
+% pos_thresholds = ideal_pos_thresholds;
+
+%% select initial thresholds
+DAC_select = 1:2^N_bits_extra:L_tot;
+
+init_thresholds = pos_thresholds(DAC_select);
+
+[~, idx] = min(abs(pos_thresholds(:) - ideal_thresholds(:).'), [], 1);
+best_thresholds = pos_thresholds(idx);
+
+%% preallocate storage
+SNDRs = zeros(cal_cycles,1);
+
+%% input signals
+t = (0:1/fs:(cal_len-1)/fs)';
+analog_in =sin(2*pi*f1*t);
+analog_in2 =sin(2*pi*f0*t);
+
+%% digital outputs
+[ideal_digi_out] = flash_adc(analog_in2,N_bits,Vhigh,Vlow,ideal_thresholds);
+    
+[initial_digi_out] = flash_adc(analog_in2,N_bits,Vhigh,Vlow,init_thresholds);
+
+[post_calib_digi_out] = post_calib_flash(analog_in2,N_bits,Vhigh,Vlow,init_thresholds);
+
+[best_calib_digi_out] = post_calib_flash(analog_in2,N_bits,Vhigh,Vlow,best_thresholds);
+
+[digi_out, SNDRs,last_thresholds] = SAR_adc_full_un_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
+        cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,N, analog_in2, ...
+        pos_thresholds, L_algo, L_tot, N_bits_extra);
+
+%%--------- Figures ----------
+%% SNDR
+figure;
+plot(SNDRs);
+hold on
+yline(calculate_SNDR(best_calib_digi_out,analog_in2,N))
+xlabel('calibration cycle')
+ylabel('SNDR (dB)')
+
+% SNDRs_cases(i) = mean(SNDRs(end-30000:end)); 
+% SNDRs_cases_max(i) = max(SNDRs); 
+
+%% INL
+figure;
+final_INL = (last_thresholds(1:end-1)-ideal_thresholds)/LSB;
+plot(final_INL);
+xlabel('threshold')
+ylabel('INL error')

@@ -4,6 +4,7 @@ clear; close all; clc;
 fs = 10000;              % Sampling rate
 t = 0:1/fs:0.01;         % Short time window (10 ms)
 Nfft   = 2048;               % Zero-padding (8×) for smoother FFT
+offset = Nfft/100;
 
 f0 = (130/Nfft)*fs;
 f1 = (200/Nfft)*fs;
@@ -47,7 +48,7 @@ set(gca, 'GridColor', 'black')
 grid on;
 
 subplot(2,1,2)
-bar(f(1:Nfft/2), X(1:Nfft/2), 0.05, 'FaceColor','b','EdgeColor','b', 'LineWidth', 2.8,'BaseValue',-80); hold on;
+bar(f(1:Nfft/2)-offset, X(1:Nfft/2), 0.05, 'FaceColor','b','EdgeColor','b', 'LineWidth', 2.8,'BaseValue',-80); hold on;
 bar(f(1:Nfft/2), Xc(1:Nfft/2),0.05,'FaceColor','r','EdgeColor','r', 'LineWidth', 2,'FaceAlpha',0.7,'BaseValue',-80);
 title('Frequency Domain – Clipping Creates Spectral Spreading','FontSize',15,'Color','black');
 xlabel('Frequency (Hz)','FontSize',15); ylabel('Magnitude (dB)','FontSize',15);
@@ -85,7 +86,7 @@ set(gca, 'GridColor', 'black')
 grid on;
 
 subplot(2,1,2)
-bar(f(1:Nfft/2), X(1:Nfft/2),0.05,'FaceColor','b','EdgeColor','b', 'LineWidth', 2.8,'BaseValue',-80); hold on;
+bar(f(1:Nfft/2)-offset, X(1:Nfft/2),0.05,'FaceColor','b','EdgeColor','b', 'LineWidth', 2.8,'BaseValue',-80); hold on;
 bar(f(1:Nfft/2), Xh(1:Nfft/2),0.05,'FaceColor','r','EdgeColor','r', 'LineWidth', 2,'FaceAlpha',0.7,'BaseValue',-80);
 title('Frequency Domain – Harmonics at 2f, 3f, …','FontSize',15,'Color','black');
 xlabel('Frequency (Hz)','FontSize',15); ylabel('Magnitude (dB)','FontSize',15);
@@ -124,7 +125,7 @@ set(gca, 'GridColor', 'black')
 grid on;
 
 subplot(2,1,2)
-bar(f(1:Nfft/2), X(1:Nfft/2),0.05,'FaceColor','b','EdgeColor','b', 'LineWidth', 2.8,'BaseValue',-80); hold on;
+bar(f(1:Nfft/2)-offset, X(1:Nfft/2),0.05,'FaceColor','b','EdgeColor','b', 'LineWidth', 2.8,'BaseValue',-80); hold on;
 bar(f(1:Nfft/2), Xi(1:Nfft/2),0.05,'FaceColor','r','EdgeColor','r', 'LineWidth', 2,'FaceAlpha',0.7,'BaseValue',-80);
 title('Frequency Domain – IMD at |m f1 ± n f2|','FontSize',15,'Color','black');
 xlabel('Frequency (Hz)','FontSize',15); ylabel('Magnitude (dB)','FontSize',15);

@@ -3,13 +3,13 @@ clear; close all; clc;
 Vhigh = 1;
 Vlow = -1;
 N_bits =8; % probeer meer bits
-cal_cycles = 500000;
+cal_cycles = 140000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
 f1 = (15.24532/N)*fs;
 non_lin_parameters = [0 1 0];
-cal_len = 8000;  % need increase for more bits
+cal_len = 15000;  % need increase for more bits
 % cal_len = 10000
 % cal_len = 10001
 % N = 2048*2^4; % fft size
@@ -24,7 +24,8 @@ Vinc = 1 * LSB;
 
 % cal_consts = [8*10^(-5) 9*10^(-5) 10^(-4) 2*10^(-4) 3*10^(-4) 4*10^(-4)];
 % cal_consts = [10^(-3) 10^(-4) 10^(-5) 10^(-6) 10^(-7) 10^(-8)];
-cal_consts = logspace(-2, -7, 12)';
+% cal_consts = logspace(0, -2, 4)';
+cal_consts = linspace(0.04, 0.1, 4);
 % cal_consts = [10^-9];
 
 to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
@@ -83,7 +84,7 @@ for i = 1:num_cases
         cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,N, analog_in2);
 
     % SNDRs_cases(i) = SNDRs(cal_cycles); 
-    SNDRs_cases(i) = mean(SNDRs(end-15000:end)); 
+    SNDRs_cases(i) = mean(SNDRs(end-3*cal_cycles/4:end)); 
 
     figure;
     plot(SNDRs);
@@ -91,7 +92,7 @@ for i = 1:num_cases
     xlabel('calibration cycle')
     ylabel('SNDR (dB)')
 
-    SNDRs_cases(i) = mean(SNDRs(end-30000:end)); 
+    SNDRs_cases(i) = mean(SNDRs(end-3*cal_cycles/4:end)); 
     SNDRs_cases_max(i) = max(SNDRs); 
 
     figure;
@@ -139,7 +140,8 @@ end
 SNDR_ideal = 6.02*N_bits + 1.76;
 
 %% Compute SNDR
-const_vals = logspace(1, -5, 200);   % cal_len range
+% const_vals = logspace(1, -5, 200);   % cal_len range
+const_vals = linspace(0.04, 0.1, 200);
 scaling = (12 * 2^(N_bits)) / (2*(Vhigh-Vlow)*cal_len);
 SNDR = SNDR_ideal - 10*log10(1 + scaling .* const_vals);
 SNDR_fit = SNDR_ideal - 10*log10(1 + 16.*scaling .* const_vals);

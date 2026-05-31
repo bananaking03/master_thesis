@@ -5,6 +5,8 @@ thresholds = [init_thresholds; Vhigh];   % append final overflow threshold
 cal_len = round(cal_len);
 nonlin_fun = @(x) polyval(fliplr(non_lin_f),x);
 SNDRs = zeros(cal_cycles,1);
+% DAC_select = zeros(1,length(pos_thresholds));
+% DAC_select(1:2^N_bits_extra - 1:end) = 1;
 
 error_matrix = 0.5 * eye(L) + ...
     -0.25 * diag(ones(L-1,1), 1) + ...
@@ -41,7 +43,8 @@ for i=1:cal_cycles
     % create digital output
 %     digi_out((i-1)*cal_len+1:i*cal_len) = adc_out - D;
     LSB = (Vhigh - Vlow)/L;
-    digi_out = adc_out - D * (Vinc / LSB);
+    % digi_out = adc_out - D * (Vinc / LSB);
+    digi_out = adc_out - D;
     
     % seperate incremented values and non-incremented values
     D_plus = digi_out(D == 1);
@@ -52,7 +55,6 @@ for i=1:cal_cycles
     edges = -0.5:1:(L + 0.5);   % L = 2^N_bits, so for 5-bit => -0.5:1:32.5
     H_plus = histcounts(D_plus, edges);
     H_min  = histcounts(D_min , edges);        % Hmin has bin 33????????????????????????????????
-    binCenters = edges(1:end-1) + diff(edges)/2;
 
     % Plot H_plus
     % figure;
@@ -121,7 +123,7 @@ for i=1:cal_cycles
     % H_delta_matched(end-1:end) = [0 0];
 %---------------------------------------------------------------------------
 
-    H_delta_matched = error_matrix_inv*H_delta;
+    % H_delta_matched = error_matrix_inv*H_delta; !!!!!!!!!!!!!!!
     % H_delta_matched = error_matrix\H_delta;
 
     % Plot H_delta_matched
@@ -136,8 +138,8 @@ for i=1:cal_cycles
 %     title('Histogram from H\_delta_matched');
 
    % Update thresholds to reduce nonlinearity
-   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta(1:end-1))./cal_len;
-   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta_matched(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta_matched(1:end-1))./(cal_len);
+   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta(1:end-1))./cal_len;
+   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta_matched(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta_matched(1:end-1))./(cal_len);
 
    % H_grad = [H_delta(1); diff(H_delta(:))];
    % H_grad = [diff(H_delta(:)); H_delta(end)];

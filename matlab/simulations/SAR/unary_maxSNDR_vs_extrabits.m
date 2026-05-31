@@ -2,7 +2,7 @@ cal_len = 5000;
 N = (2048*2^-3)-1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
-LSC0 = 1.5*10^-20;
+LSC0 = 0.976*10^-15;
 mismlinkatch_LSC0 = 0.25;
 Vlow = -1;
 Vhigh = 1;
@@ -10,12 +10,16 @@ Bits_tested = 10;
 N_bits = Bits_tested;
 % extra_caps_tested = 0:14;
 extra_caps_tested = 0:8;
+cap_tot = 10^-12;
 
 A_vt = 2*10^-5; % technology constant
 cap_dens = 1; % F per m^2
 AreaLSC = LSC0/cap_dens;
 sigmaLSC = A_vt*LSC0/sqrt(AreaLSC);
 mismatch_LSC0 = A_vt/sqrt(AreaLSC);
+% mismatch_LSC0 = 0;
+
+% mismatch_LSC0 = 0;
 
 L = 2^N_bits;
 
@@ -49,7 +53,8 @@ ideal_SNDRs = calculate_SNDR(ideal_digi_out,analog_in,N);
 %     end
 % end
 
-MC_runs = 500;
+MC_runs = 200;
+% MC_runs = 1;
 SNDRs = zeros(length(extra_caps_tested), MC_runs);
 SNDRs_interpol = zeros(length(extra_caps_tested), MC_runs);
 SNDRs_interpol2 = zeros(length(extra_caps_tested), MC_runs);
@@ -61,31 +66,66 @@ for mc = 1:MC_runs
 
         L_caps = 2^(N_bits_caps+N_bits);
         L_caps_extra = 2^N_bits_caps;
-        % 
-        % % Create the caps with mismatch
+        % % 
+        % LSC0 = cap_tot/L_caps;
+        % AreaLSC = LSC0/cap_dens;
+        % sigmaLSC = A_vt*LSC0/sqrt(AreaLSC);
+        % mismatch_LSC0 = A_vt/sqrt(AreaLSC);
+        % % % Create the caps with mismatch
         % caps = derrive_caps_unary(L_caps, ...
         %     mismatch_LSC0, LSC0);
         % 
-        % pos_thresholds = cap_to_thr_unary(caps,Vlow,Vhigh);
+        % pos_thresholds = cap_to_thr_unary(caps,Vlow,Vhigh).';
 
         %---------------------------------------------------
 
         caps_DACun = derrive_caps_unary(L, ...
             mismatch_LSC0, LSC0);
 
-        caps_DACbin = derrive_caps(N_bits_caps,mismatch_LSC0*sqrt(LSC0/(LSC0/(2^(N_bits_caps+1)))),LSC0/(2^(N_bits_caps+1)));
+        % caps_DACbin = derrive_caps(N_bits_caps,mismatch_LSC0*sqrt(LSC0/(8*LSC0/(2^(N_bits_caps)))),10240*LSC0/(2^(N_bits_caps)));
+        caps_DACbin = derrive_caps_unary(L_caps_extra,mismatch_LSC0*sqrt(LSC0/(LSC0/(2^(N_bits_caps+1)))),LSC0/(2^(N_bits_caps+1)));
 
-        pos_thresholds_un = cap_to_thr_unary(caps_DACun,Vlow,Vhigh);
+        % pos_thresholds_un = cap_to_thr_unary(caps_DACun,Vlow,Vhigh);
+        caps = caps_DACun;
+
+        Vrange = Vhigh - Vlow;
+Vmid   = (Vhigh + Vlow) / 2;
+
+C_tot = sum(caps);
+
+pos_thresholds_un = zeros(length(caps)+1,1);
+
+if (C_tot == 0)
+    pos_thresholds_un(:) = Vmid;
+    return;
+end
+
+for i = 0:length(caps)
+
+    % Normalized cumulative charge
+    frac = sum(caps(1:i)) / C_tot;
+
+    % Center thresholds around midpoint
+    pos_thresholds_un(i+1) = Vmid + Vrange * (frac - 0.5);
+end
         % pos_thresholds_un = pos_thresholds_un(:);
 
-        pos_thresholds_bin = cap_to_thr(caps_DACbin,0,(Vhigh-Vlow)/(L));
-        % pos_thresholds_bin = pos_thresholds_bin(:).';
+        % pos_thresholds_bin = cap_to_thr(caps_DACbin,-(Vhigh-Vlow)/(2*L),(Vhigh-Vlow)/(2*L));
+        pos_thresholds_bin = cap_to_thr_unary(caps_DACbin,-1*(Vhigh-Vlow)/(8*L),1*(Vhigh-Vlow)/(8*L));
+        % pos_thresholds_bin = flip(pos_thresholds_bin);
+        pos_thresholds_bin = pos_thresholds_bin(:).';
 
         % C = pos_thresholds_un + pos_thresholds_bin;
         % pos_thresholds = C(:).';
 
         pos_thresholds = reshape(pos_thresholds_bin(:) + pos_thresholds_un(:).', 1, []);
         pos_thresholds = pos_thresholds(1:end-L_caps_extra+1);
+
+        if (N_bits_caps == 0)
+            pos_thresholds = pos_thresholds_un.';
+        end
+
+        pos_thresholds = sort(pos_thresholds);
 
         %---------------------------------------------------------------
 
@@ -125,7 +165,7 @@ for mc = 1:MC_runs
         interpolthr3(2:4:end-2) = pos_thresholds(round(interpol_1idx3));
         interpolthr3(3:4:end-2) = pos_thresholds(round(interpol_2idx3));
         interpolthr3(4:4:end-2) = pos_thresholds(round(interpol_3idx3));
-        % interpolthr3(end-mod((L-1),4):end) = best_thresholds(end-mod((L-1),4):end);
+        interpolthr3(end-mod((L-1),4):end) = best_thresholds(end-mod((L-1),4):end);
 
         [best_digi_out] = flash_adc(analog_in,N_bits,Vhigh,Vlow,best_thresholds.');
         [interpol_digi_out] = flash_adc(analog_in,N_bits,Vhigh,Vlow,interpolthr);
