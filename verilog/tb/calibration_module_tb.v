@@ -36,42 +36,41 @@ module tb_calibration_module;
     end
 
     // Test scenario
-    integer cycle_cnt;
-    integer print_cnt;
+    localparam INPUT_LEN = 10000;
+
+    reg [ALGO_DATA_WIDTH-1:0] data_mem [0:INPUT_LEN-1];
+    reg [DAC_CTRL_WIDTH-1:0] dacctrl_mem [0:INPUT_LEN-1];
+    integer sample_idx;
+
     initial begin
         // Waveform dump
         $dumpfile("calibration_module_tb.vcd");
         $dumpvars(0, tb_calibration_module);
 
+        // Load stimulus from MATLAB-generated memory files
+        $readmemh("verilog/tb/calibration_data_in.mem", data_mem);
+        $readmemh("verilog/tb/calibration_DAC_ctrl_in.mem", dacctrl_mem);
+
         // init
         rst_n = 0;
         data_in = 0;
         DAC_ctrl_in = 0;
-        cycle_cnt = 0;
-        print_cnt = 0;
+        sample_idx = 0;
 
         // release reset after a few cycles
         #(CLK_PERIOD*5);
         rst_n = 1;
 
-        // Run for a while to cover at least a couple calibration cycles
-        while (cycle_cnt < 20000) begin
+        // Apply stimulus from the file
+        while (sample_idx < INPUT_LEN) begin
             @(posedge clk);
-            cycle_cnt = cycle_cnt + 1;
-
-            // simple stimulus: ramp data_in and DAC_ctrl_in to exercise logic
-            data_in <= data_in + 1;
-            DAC_ctrl_in <= DAC_ctrl_in + 1;
-
-            // occasional logging
-            print_cnt = print_cnt + 1;
-            if (print_cnt == 1000) begin
-                $display("time=%0t cycle=%0d data_in=%0d DAC_ctrl_in=%0d dither=%b DAC_ctrl_out=%b", $time, cycle_cnt, data_in, DAC_ctrl_in, dither_out, DAC_ctrl_out);
-                print_cnt = 0;
-            end
+            data_in = data_mem[sample_idx];
+            DAC_ctrl_in = dacctrl_mem[sample_idx];
+            sample_idx = sample_idx + 1;
         end
 
-        $display("Testbench finished at time %0t", $time);
+        // Allow a few extra cycles for the DUT to settle
+        repeat (10) @(posedge clk);
         $finish;
     end
 

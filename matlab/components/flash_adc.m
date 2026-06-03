@@ -24,24 +24,26 @@ function [digital_out] = flash_adc(analog_in, N_bits, Vhigh, Vlow, thresholds)
         error('Usage: flash_adc(analog_in, N_bits, Vref, error_level)');
     end
     analog_in = analog_in(:); % force column vector
-
-    % --- Ideal ADC step size ---
-    % L = 2^N_bits;
+    thresholds = thresholds(:).'; % row vector for comparison
 
     % --- Quantize input ---
-    % digital_out = zeros(size(analog_in));
+    % Use chunking for large input arrays to avoid oversized temporary matrices.
+    maxRowsPerChunk = 1e6;
+    numSamples = numel(analog_in);
+    digital_out = zeros(numSamples, 1, 'like', analog_in);
 
-    % for k = 1:length(analog_in)
-    %     % Count how many thresholds the input exceeds
-    %     % thresholds must have length = L  (i.e., 2^N_bits)
-    %     % digital_out will then be 0..L
-    % 
-    %     digital_out(k) = sum(analog_in(k) > thresholds);   % now outputs 0..L
-    % 
-    %     digital_out(k) = digital_out(k) + (analog_in(k) > Vhigh); % may need removal
-    % end
+    if numSamples == 0
+        return;
+    end
 
-    digital_out = sum(analog_in > thresholds.', 2);
+    if numSamples * numel(thresholds) <= 1e8
+        digital_out = sum(analog_in > thresholds, 2);
+    else
+        for startIdx = 1:maxRowsPerChunk:numSamples
+            endIdx = min(startIdx + maxRowsPerChunk - 1, numSamples);
+            digital_out(startIdx:endIdx) = sum(analog_in(startIdx:endIdx) > thresholds, 2);
+        end
+    end
     % digital_out = digital_out + (analog_in > Vhigh);
 
     % Clip to valid range
