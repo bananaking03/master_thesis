@@ -4,6 +4,9 @@
 *.avi
 *.mat
 *.mem
+*.history
+*.log
+xcelium.d
 
 # Ignore node modules
 node_modules/
