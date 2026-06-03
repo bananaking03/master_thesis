@@ -3,6 +3,7 @@
 *.mov
 *.avi
 *.mat
+*.mem
 
 # Ignore node modules
 node_modules/
