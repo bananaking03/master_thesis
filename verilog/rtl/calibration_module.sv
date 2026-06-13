@@ -18,8 +18,8 @@ module calibration_module #(
     localparam EXTRA_WIDTH_FROM_ALGO_TO_DAC = DAC_EXTRA_DATA_WIDTH + DAC_CTRL_WIDTH - ALGO_DATA_WIDTH;
     localparam NUM_HIST = 1 << ALGO_DATA_WIDTH; // number of histogram bins / thresholds
     localparam NUM_THRESHOLDS = NUM_HIST;
-    reg [HISTOGRAM_DATA_WIDTH-1:0] hist_plus_data [0:NUM_HIST-1];
-    reg [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_data [0:NUM_HIST-1];
+    wire [HISTOGRAM_DATA_WIDTH-1:0] hist_plus_data [0:NUM_HIST-1];
+    wire [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_data [0:NUM_HIST-1];
 
     // Generate dither signal
     dither_gen dither_gen (
