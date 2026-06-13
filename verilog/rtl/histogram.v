@@ -1,13 +1,14 @@
 module histogram #(
     parameter ALGO_DATA_WIDTH = 8,
-    parameter HISTOGRAM_DATA_WIDTH = 5
+    parameter HISTOGRAM_DATA_WIDTH = 5,
+    parameter NUM_BINS = (1 << ALGO_DATA_WIDTH)
 ) 
 (
     input wire clk,
     input wire rst_n,
     input wire acc_en,
     input wire [ALGO_DATA_WIDTH-1:0] data_in,
-    output reg [HISTOGRAM_DATA_WIDTH-1:0] data_out [(2**ALGO_DATA_WIDTH)-1:0]
+    output reg [HISTOGRAM_DATA_WIDTH-1:0] data_out [0:NUM_BINS-1]
 );
 
     integer i;
@@ -15,7 +16,7 @@ module histogram #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             // Reset histogram data
-            for (i = 0; i < (2**ALGO_DATA_WIDTH); i = i + 1) begin
+            for (i = 0; i < NUM_BINS; i = i + 1) begin
                 data_out[i] <= 0;
             end
         end else if (acc_en) begin

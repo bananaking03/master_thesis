@@ -39,7 +39,8 @@ module calibration_module #(
     
     // Accumulate histogram data
     histogram #(
-        .DATA_WIDTH(ALGO_DATA_WIDTH)
+        .ALGO_DATA_WIDTH(ALGO_DATA_WIDTH),
+        .HISTOGRAM_DATA_WIDTH(HISTOGRAM_DATA_WIDTH)
     ) hist_plus_inst (
         .clk(clk),
         .rst_n(rst_n),
@@ -49,7 +50,8 @@ module calibration_module #(
     );
 
     histogram #(
-        .DATA_WIDTH(ALGO_DATA_WIDTH)
+        .ALGO_DATA_WIDTH(ALGO_DATA_WIDTH),
+        .HISTOGRAM_DATA_WIDTH(HISTOGRAM_DATA_WIDTH)
     ) hist_minus_inst (
         .clk(clk),
         .rst_n(rst_n),
