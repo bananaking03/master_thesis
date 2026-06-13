@@ -1,4 +1,4 @@
-module digher_gen (
+module dither_gen (
     input wire clk,
     input wire rst_n,
     output reg dither_out

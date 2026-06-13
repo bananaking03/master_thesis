@@ -22,7 +22,7 @@ module calibration_module #(
     reg [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_data [0:NUM_HIST-1];
 
     // Generate dither signal
-    dither_generator dither_gen (
+    dither_gen dither_gen (
         .clk(clk),
         .rst_n(rst_n),
         .dither_out(dither_out)
