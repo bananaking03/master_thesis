@@ -3,7 +3,7 @@ module calibration_module #(
     parameter ALGO_DATA_WIDTH = 8,
     parameter DAC_CTRL_WIDTH = 10,
     parameter HISTOGRAM_DATA_WIDTH = 5,
-    parameter CALIBRATION_LENGTH = 1800
+    parameter CALIBRATION_LENGTH = 1800,
     parameter CAL_CONSTANT = 0.1 // scaling constant for histogram difference to threshold update
 )(
     input wire clk,
