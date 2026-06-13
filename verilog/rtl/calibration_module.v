@@ -15,9 +15,10 @@ module calibration_module #(
 
     // Internal signals
     localparam EXTRA_WIDTH_FROM_ALGO_TO_DAC = DAC_EXTRA_DATA_WIDTH + DAC_CTRL_WIDTH - ALGO_DATA_WIDTH;
-
-    reg [(2**ALGO_DATA_WIDTH)-1:0] [HISTOGRAM_DATA_WIDTH-1:0] hist_plus_data;
-    reg [(2**ALGO_DATA_WIDTH)-1:0] [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_data;
+    localparam NUM_HIST = 1 << ALGO_DATA_WIDTH; // number of histogram bins / thresholds
+    localparam NUM_THRESHOLDS = NUM_HIST;
+    reg [HISTOGRAM_DATA_WIDTH-1:0] hist_plus_data [0:NUM_HIST-1];
+    reg [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_data [0:NUM_HIST-1];
 
     // Generate dither signal
     dither_generator dither_gen (
@@ -36,9 +37,9 @@ module calibration_module #(
     end
     
     // Accumulate histogram data
-    histogram_plus #(
+    histogram #(
         .DATA_WIDTH(ALGO_DATA_WIDTH)
-    ) histogram (
+    ) hist_plus_inst (
         .clk(clk),
         .rst_n(rst_n),
         .acc_en(prev_dither_out),
@@ -46,9 +47,9 @@ module calibration_module #(
         .data_out(hist_plus_data)
     );
 
-    histogram_minus #(
+    histogram #(
         .DATA_WIDTH(ALGO_DATA_WIDTH)
-    ) histogram (
+    ) hist_minus_inst (
         .clk(clk),
         .rst_n(rst_n),
         .acc_en(~prev_dither_out),
@@ -56,18 +57,19 @@ module calibration_module #(
         .data_out(hist_minus_data)
     );
 
+
     // Calculate histogram difference element-wise and multiply with cal_constant
-    wire [(2**ALGO_DATA_WIDTH)-1:0] [HISTOGRAM_DATA_WIDTH-1:0] histogram_diff;
+    wire [HISTOGRAM_DATA_WIDTH-1:0] histogram_diff [0:NUM_HIST-1];
 
     genvar i;
     generate
-        for (i = 0; i < (2**ALGO_DATA_WIDTH); i = i + 1) begin : gen_hist_diff
+        for (i = 0; i < NUM_HIST; i = i + 1) begin : gen_hist_diff
             assign histogram_diff[i] = (hist_plus_data[i] - hist_minus_data[i]) * cal_constant; // cal_constant is a predefined constant for scaling
         end
     endgenerate
 
     // Registers to store the thresholds
-    reg [(2**ALGO_DATA_WIDTH)-1:0] [HISTOGRAM_DATA_WIDTH-1:0] delta_thresholds_reg;
+    reg [HISTOGRAM_DATA_WIDTH-1:0] delta_thresholds_reg [0:NUM_HIST-1];
 
     // update thresholds after a calibration length of cycles
     // counter width uses a safe 32-bit reg (CALIBRATION_LENGTH fits in 32 bits)
@@ -85,7 +87,7 @@ module calibration_module #(
             if (calib_cnt == (CALIBRATION_LENGTH - 1)) begin
                 // reached calibration length: update thresholds based on histogram_diff
                 integer k;
-                for (k = 0; k < (2**ALGO_DATA_WIDTH); k = k + 1) begin
+                for (k = 0; k < NUM_HIST; k = k + 1) begin
                     delta_thresholds_reg[k] <= delta_thresholds_reg[k] + histogram_diff[k]; // Update with calculated difference
                 end
                 calib_cnt <= 32'd0;
@@ -103,12 +105,12 @@ module calibration_module #(
     wire [1:0] DAC_ctrl_fraction = DAC_ctrl_in & 3;  // DAC_ctrl_in % 4
     wire [DAC_CTRL_WIDTH-1:0] DAC_ctrl_index_upper = DAC_ctrl_index_lower + (|DAC_ctrl_fraction ? 1 : 0);  // ceil(DAC_ctrl_in / 4)
     
-    wire [HISTOGRAM_DATA_WIDTH + DAC_CTRL_WIDTH - 1:0] DAC_ctrl_bin_sum;
+    reg [HISTOGRAM_DATA_WIDTH + DAC_CTRL_WIDTH - 1:0] DAC_ctrl_bin_sum;
     wire [HISTOGRAM_DATA_WIDTH + DAC_CTRL_WIDTH - 1:0] DAC_ctrl_bin_frac;
     
     // Sum from index 0 to floor(DAC_ctrl_in/4)
     always @(*) begin
-        int sum_idx;
+        integer sum_idx;
         DAC_ctrl_bin_sum = 0;
         for (sum_idx = 0; sum_idx <= DAC_ctrl_index_lower; sum_idx = sum_idx + 1) begin
             DAC_ctrl_bin_sum = DAC_ctrl_bin_sum + delta_thresholds_reg[sum_idx];
