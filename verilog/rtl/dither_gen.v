@@ -16,5 +16,4 @@ module digher_gen (
             dither_out <= lfsr[0]; // Output the least significant bit as dither signal
         end
     end
-)
 endmodule
