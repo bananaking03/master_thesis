@@ -1,0 +1,13 @@
+export WORK_DIR=$(git rev-parse --show-toplevel)
+source /users/micas/micas/design/scripts/ic_23.10.020.rc
+export CDS_LOG_PATH="${WORK_DIR}/run"
+
+#Setup Virtuoso Studio
+source /users/micas/micas/design/scripts/ic_23.10.020.rc
+#export CDS_LIC_FILE=2700@license-extern.esat.kuleuven.be
+
+# setup Spectre
+source /users/micas/micas/design/scripts/spectre_23.10.242.rc
+
+# setup Xcelium
+source /users/micas/micas/design/scripts/xcelium_23.09.008.rc
