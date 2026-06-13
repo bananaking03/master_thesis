@@ -4,6 +4,7 @@ module calibration_module #(
     parameter DAC_CTRL_WIDTH = 10,
     parameter HISTOGRAM_DATA_WIDTH = 5,
     parameter CALIBRATION_LENGTH = 1800
+    parameter CAL_CONSTANT = 0.1 // scaling constant for histogram difference to threshold update
 )(
     input wire clk,
     input wire rst_n,
@@ -64,7 +65,7 @@ module calibration_module #(
     genvar i;
     generate
         for (i = 0; i < NUM_HIST; i = i + 1) begin : gen_hist_diff
-            assign histogram_diff[i] = (hist_plus_data[i] - hist_minus_data[i]) * cal_constant; // cal_constant is a predefined constant for scaling
+            assign histogram_diff[i] = (hist_plus_data[i] - hist_minus_data[i]) * CAL_CONSTANT; // cal_constant is a predefined constant for scaling
         end
     endgenerate
 

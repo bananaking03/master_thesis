@@ -19,7 +19,8 @@ module tb_calibration_module;
         .ALGO_DATA_WIDTH(ALGO_DATA_WIDTH),
         .DAC_CTRL_WIDTH(DAC_CTRL_WIDTH),
         .HISTOGRAM_DATA_WIDTH(5),
-        .CALIBRATION_LENGTH(1800)
+        .CALIBRATION_LENGTH(1800),
+        .CAL_CONSTANT(0.1)
     ) uut (
         .clk(clk),
         .rst_n(rst_n),
