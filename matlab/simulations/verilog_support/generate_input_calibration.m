@@ -91,12 +91,38 @@ function [data_in, dither_bits, DAC_ctrl_in, thresholds, analog_in] = generate_i
         dataWidthHex = ceil(N_bits / 4);
         ctrlWidthHex = ceil(DAC_CTRL_WIDTH / 4);
 
+        disp(['Writing mem files to: ', memDir]);
+
+        % Write data file with error checks
+        dataFormat = ['%0' num2str(dataWidthHex) 'x\n'];
         fid = fopen(dataFile, 'w');
-        fprintf(fid, ['%0' num2str(dataWidthHex) 'x\n'], data_in);
+        if fid == -1
+            error('Failed to open file for writing: %s', dataFile);
+        end
+        try
+            for idx = 1:numel(data_in)
+                fprintf(fid, dataFormat, double(data_in(idx)));
+            end
+        catch writeErr
+            fclose(fid);
+            rethrow(writeErr);
+        end
         fclose(fid);
 
+        % Write control file with error checks
+        ctrlFormat = ['%0' num2str(ctrlWidthHex) 'x\n'];
         fid = fopen(ctrlFile, 'w');
-        fprintf(fid, ['%0' num2str(ctrlWidthHex) 'x\n'], DAC_ctrl_in);
+        if fid == -1
+            error('Failed to open file for writing: %s', ctrlFile);
+        end
+        try
+            for idx = 1:numel(DAC_ctrl_in)
+                fprintf(fid, ctrlFormat, double(DAC_ctrl_in(idx)));
+            end
+        catch writeErr
+            fclose(fid);
+            rethrow(writeErr);
+        end
         fclose(fid);
     end
 end
