@@ -14,5 +14,21 @@ node_modules/
 # Ignore environment files
 .env
 
+# Ignore simulator and SimVision output files
+*.diag
+*.vpd
+*.wlf
+*.shm
+*.simvision
+*.key
+*simvision*
+*.history
+*.log
+xrun.*
+xcelium.d/
+xcelium.shm/
+waves.shm/
+.simvision/
+
 # Ignore specific files
 papers/High_speed ADC by Ahmed Ali.pdf

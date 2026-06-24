@@ -7,6 +7,7 @@ module histogram #(
     input  logic clk,
     input  logic rst_n,
     input  logic acc_en,
+    input  wire reset_bins,
     input  logic [ALGO_DATA_WIDTH-1:0] data_in,
     output logic [HISTOGRAM_DATA_WIDTH-1:0] data_out [0:NUM_BINS-1]
 );
@@ -18,6 +19,11 @@ module histogram #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             // Reset histogram data
+            for (i = 0; i < NUM_BINS; i = i + 1) begin
+                bin_reg[i] <= '{default: '0};
+            end
+        end else if (reset_bins) begin
+            // Clear histogram bins when thresholds are updated
             for (i = 0; i < NUM_BINS; i = i + 1) begin
                 bin_reg[i] <= '{default: '0};
             end
