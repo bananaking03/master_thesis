@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 module sar_controller_hw_tb;
-    parameter N = 8;
+    parameter N = 10;
 
     reg clk = 0;
     reg rst_n = 0;
@@ -34,8 +34,8 @@ module sar_controller_hw_tb;
 
     initial begin
         $display("Starting controller TB");
-        $dumpfile("sar_controller_hw_tb.vcd");
-        $dumpvars(0, sar_controller_hw_tb);
+        // $dumpfile("sar_controller_hw_tb.vcd");
+        // $dumpvars(0, sar_controller_hw_tb);
 
         // reset
         rst_n = 0; start = 0; vin = 0;

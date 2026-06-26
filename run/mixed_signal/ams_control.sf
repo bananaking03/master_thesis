@@ -1,0 +1,11 @@
+amsd {
+    ie vsup=2
+    portmap subckt=SAR_logic use=verilog
+    connectrules cmos_connect {
+        connect $drivertype electrical $receivertype logic \
+            connectmodule electricalToLogic;
+        connect $drivertype logic $receivertype electrical \
+            connectmodule logicToElectrical;
+    }
+    connect -aport SAR_logic -connectrules cmos_connect
+}
