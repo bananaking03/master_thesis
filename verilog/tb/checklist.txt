@@ -1,5 +1,9 @@
+calibration module
 H_plus: works correctly
 H_min: --
 H_delta: rounds down the absolute value(calconst) and deifferentiates properly
 threshold update: thresholds update correctly
 address translation: works but slow, if you want faster decrease the DAC out
+
+SAR controller:
+cdac_bits: works but is still binary

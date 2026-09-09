@@ -1,19 +1,19 @@
-% clear; close all; clc;
+clear; close all; clc;
 % change to differantial system!!!!! Check distortie
 Vhigh = 1;
 Vlow = -1;
 N_bits =10; % probeer meer bits
 N_bits_algo = 8;
 N_bits_caps = 15; 
-cal_cycles = 100000;
+cal_cycles = 10000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
 f1 = (15.24532/N)*fs;
 LSC = 10^-15; % least signifigant capacitance
 % LSC = 10^-18;
-mismatch_LSC = 0.1;
-% mismatch_LSC = 0;
+% mismatch_LSC = 0.1;
+mismatch_LSC = 0;
 non_lin_parameters = [0 0.9 0 0.1];
 % cal_len = 5000000;  % need increase for more bits
 cal_len = 10000;
@@ -34,8 +34,8 @@ LSB = (Vhigh - Vlow) / L;
 
 % cal_consts = [8*10^(-5) 9*10^(-5) 10^(-4) 2*10^(-4) 3*10^(-4) 4*10^(-4)];
 % cal_consts = [10^(-3) 10^(-4) 10^(-5) 10^(-6) 10^(-7) 10^(-8)];
-% cal_consts = logspace(-3, 0, 6)';
-cal_consts = [1*10^-1];
+% cal_consts = logspace(-12, -3, 10)';
+cal_consts = [1*10^-2];
 
 to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
 
@@ -88,7 +88,7 @@ for i = 1:num_cases
     [digi_out, SNDRs,last_thresholds] = SAR_adc_full_un_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
         cal_constant, cal_cutoff, init_thresholds(2:end), ...
         Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,lambda_reg, N, analog_in2, pos_thresholds, ...
-        L_algo,L_tot,N_bits_extra);
+        L,L_tot,N_bits_extra);
 
     figure;
     plot(SNDRs);

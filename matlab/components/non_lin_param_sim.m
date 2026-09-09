@@ -1,0 +1,113 @@
+clear all;close all; clc;
+
+%% Parameters
+N_bits = 10;
+N_bits_caps = 10; 
+N_bits_algo = 8;
+Vhigh = 1;
+Vlow = -1;
+N = (2048*2^-3) - 1; % fft size
+fs = 48000;  % coherent sampling
+f0 = (13/N)*fs;
+f1 = (15.24532/N)*fs;
+LSC = 10^-15; % least signifigant capacitance
+% LSC = 10^-18;
+mismatch_LSC = 0.1;
+cal_len = 10000;
+
+L = 2^N_bits;
+L_algo = 2^N_bits_algo;
+L_tot = 2^N_bits_caps;
+N_bits_extra = N_bits_caps - N_bits;
+
+non_lin_parameters = [0 0.6 0 0.4];
+nonlin_fun = @(x) polyval(fliplr(non_lin_parameters),x);
+% inv_nonlin_fun = @(x) 1./nonlin_fun(x);
+inv_nonlin_fun = @(y) arrayfun(@(y_val) ...
+    fzero(@(x) nonlin_fun(x) - y_val, y_val), y);
+
+%% --- Create thresholds ---
+ideal_thresholds = linspace(Vlow, Vhigh, L+1)';
+ideal_thresholds = ideal_thresholds(2:end-1);
+non_lin_ideal_thresholds = nonlin_fun(ideal_thresholds);
+
+% Create the caps
+caps = derrive_caps(N_bits_caps,mismatch_LSC,LSC);
+
+% thresholds from caps
+DAC_select = 1:2^N_bits_extra:L_tot;
+% init_thresholds = cap_to_thr(caps(1:N_bits+1),Vlow,Vhigh);
+pos_thresholds = cap_to_thr(caps,Vlow,Vhigh); % possible thresholds
+init_thresholds = pos_thresholds(DAC_select);
+
+[~, idx] = min(abs(pos_thresholds(:) - ideal_thresholds(:).'), [], 1);
+lin_best_thresholds = pos_thresholds(idx);
+
+[~, idx_best] = min(abs(pos_thresholds(:) - non_lin_ideal_thresholds(:).'), [], 1);
+non_lin_best_thresholds = pos_thresholds(idx_best);
+
+% get interpolated thresholds
+DAC_select_interp = idx;
+idx = (1:4:length(idx_best));
+DAC_select_interp(1:end-3) = interp1(idx, idx_best(1:4:end), 1:(length(idx_best)-3), 'linear');
+non_lin_best_thresholds_interp = pos_thresholds(round(DAC_select_interp));
+
+%% Calculate SNDRs
+t = (0:1/fs:(cal_len-1)/fs)';
+test_input =sin(2*pi*f0*t);
+non_lin_test_input = nonlin_fun(test_input);
+
+adc_out_ideal = flash_adc(test_input,N_bits,Vhigh,Vlow,ideal_thresholds);
+SNDR_ideal = calculate_SNDR(adc_out_ideal,test_input,N);
+
+adc_out_non_lin_ideal = flash_adc(non_lin_test_input,N_bits,Vhigh,Vlow,non_lin_ideal_thresholds(2:end));
+SNDR_non_lin_ideal = calculate_SNDR(adc_out_non_lin_ideal, test_input,N);
+
+adc_out_non_lin_best = flash_adc(non_lin_test_input,N_bits,Vhigh,Vlow,non_lin_best_thresholds(2:end));
+SNDR_non_lin_best = calculate_SNDR(adc_out_non_lin_best, test_input,N);
+
+adc_out_non_lin_best_interp = flash_adc(non_lin_test_input,N_bits,Vhigh,Vlow,non_lin_best_thresholds_interp(2:end));
+SNDR_non_lin_best_interp = calculate_SNDR(adc_out_non_lin_best_interp, test_input,N);
+
+%% Collect SNDRs
+
+SNDRs = [
+    SNDR_ideal
+    SNDR_non_lin_ideal
+    SNDR_non_lin_best
+    SNDR_non_lin_best_interp;
+];
+
+labels = {
+    'Ideal'
+    'Nonlinear input, perfect non lin thr'
+    'Nonlinear input, best possible non lin thr'
+    'Nonlinear input, interpolated non lin thr'
+};
+
+%% Plots
+figure;
+fplot(nonlin_fun);
+hold on
+fplot(inv_nonlin_fun);
+fplot(@(x) x);
+xlim([-1 1])
+hold off
+
+figure;
+plot(ideal_thresholds);
+hold on
+plot(non_lin_best_thresholds)
+
+% Plot SNDR comparison
+figure;
+bar(SNDRs);
+
+set(gca, ...
+    'XTick', 1:length(SNDRs), ...
+    'XTickLabel', labels);
+
+ylabel('SNDR [dB]');
+xlabel('ADC configuration');
+title('SNDR comparison');
+grid on;

@@ -2,20 +2,21 @@ clear; close all; clc;
 % change to differantial system!!!!! Check distortie
 Vhigh = 1;
 Vlow = -1;
-N_bits =9; % probeer meer bits
-cal_cycles =  1000000;
+N_bits =10; % probeer meer bits
+cal_cycles =  500000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
 f1 = (15.24532/N)*fs;
-non_lin_parameters = [0 1 0];
+non_lin_parameters = [0 0.9 0 0.1];
 % cal_len = 10000000/(2^5);  % need increase for more bits
 % cal_len = 10000
 % cal_len = 10001
 % N = 2048*2^4; % fft size
 analyze_spesific = 1;
 cal_cutoff = 0;
-cal_constant = 0.000001;
+cal_constant = 0.01;
+lambda_reg = 0.1;
 
 save_video = true;
 
@@ -25,7 +26,8 @@ Vinc = 1 * LSB;
 
 % cal_consts = [8*10^(-5) 9*10^(-5) 10^(-4) 2*10^(-4) 3*10^(-4) 4*10^(-4)];
 % cal_consts = [10^(-3) 10^(-4) 10^(-5) 10^(-6) 10^(-7) 10^(-8)];
-cal_lens = logspace(2, 5, 8)';
+% cal_lens = logspace(2, 5, 8)';
+cal_lens = 10^4;
 % cal_lens = 10^6;
 % cal_lens = 3*10^4;
 % cal_lens = 10^6;
@@ -39,7 +41,7 @@ ideal_thresholds = ideal_thresholds(2:end-1);
 
 % Initialize thresholds
 init_thresholds = linspace(Vlow, Vhigh, L+1)'; % L+1 edges
-init_thresholds(6) = init_thresholds(6) + LSB*0.9;
+% init_thresholds(6) = init_thresholds(6) + LSB*0.9;
 init_thresholds = init_thresholds(2:end-1); % remove 0 and Vref
 % noise added around each threshold independently
 noise_amp = 10 * LSB;
@@ -51,7 +53,7 @@ noisy = sort(noisy);
 % now RE-MAP them to preserve spacing
 noisy = interp1(ideal_thresholds, noisy, ideal_thresholds, 'linear', 'extrap');
 
-init_thresholds = noisy;
+% init_thresholds = noisy;
 
 % Preallocate storage
 num_cases = length(cal_lens);
@@ -71,7 +73,8 @@ for i = 1:num_cases
 
     % analog_in = 0.5 + 0.5*sin(2*pi*20*t);
     t = (0:1/fs:(cal_len-1)/fs)';
-    analog_in =sin(2*pi*f1*t);
+    analog_in = sin(2*pi*f1*t);
+    % analog_in = 2*rand(cal_len,1) -1;
     % analog_in = mod(t,1);
     
     t = (0:1/fs:(cal_len-1)/fs)';
@@ -85,7 +88,7 @@ for i = 1:num_cases
     
     % Call your calibration function
     [digi_out, SNDRs,last_thresholds] = flash_adc_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
-        cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,N, analog_in2);
+        cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters, lambda_reg, N, analog_in2);
 
     figure;
     plot(SNDRs);
@@ -93,7 +96,8 @@ for i = 1:num_cases
     xlabel('calibration cycle')
     ylabel('SNDR (dB)')
 
-    SNDRs_cases(i) = mean(SNDRs(end-30000:end)); 
+    % SNDRs_cases(i) = mean(SNDRs(end-30000:end));
+    SNDRs_cases(i) = SNDRs(end);
     SNDRs_cases_max(i) = max(SNDRs); 
 
     figure;

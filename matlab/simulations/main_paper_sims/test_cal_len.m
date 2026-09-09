@@ -2,8 +2,8 @@ clear; close all; clc;
 
 Vhigh = 1;
 Vlow = -1;
-N_bits = 10;
-cal_cycles = 5000;
+N_bits = 8;
+cal_cycles = 100;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
@@ -15,7 +15,8 @@ L = 2^N_bits;
 Vinc = (Vhigh-Vlow) / L; % 1 LSB test meer dither grootes-----------------
 
 % cal_lens = [10 100 1000 10000 100000 1000000];
-cal_lens = logspace(3, 5.2, 10)';
+% cal_lens = logspace(3, 5.2, 10)';
+cal_lens = 10^4;
 
 to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
 
@@ -37,7 +38,7 @@ noisy = sort(noisy);
 % now RE-MAP them to preserve spacing
 noisy = interp1(ideal_thresholds, noisy, ideal_thresholds, 'linear', 'extrap');
 
-init_thresholds = noisy;
+% init_thresholds = noisy;
 
 % Preallocate storage
 num_cases = length(cal_lens);

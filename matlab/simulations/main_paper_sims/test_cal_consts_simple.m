@@ -15,6 +15,7 @@ cal_len = 15000;  % need increase for more bits
 % N = 2048*2^4; % fft size
 analyze_spesific = 1;
 cal_cutoff = 0;
+lambda_reg = 0.1;
 
 save_video = true;
 
@@ -81,7 +82,7 @@ for i = 1:num_cases
     
     % Call your calibration function
     [digi_out, SNDRs,last_thresholds] = flash_adc_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
-        cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,N, analog_in2);
+        cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters, lambda_reg, N, analog_in2);
 
     % SNDRs_cases(i) = SNDRs(cal_cycles); 
     SNDRs_cases(i) = mean(SNDRs(end-3*cal_cycles/4:end)); 

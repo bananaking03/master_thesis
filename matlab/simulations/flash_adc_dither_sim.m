@@ -15,6 +15,16 @@ nonlin_fun = @(x) polyval(fliplr(non_lin_f),x);
 % discretisize thresholds
 LSB_value = 10^-8;
 
+error_matrix = 0.5 * eye(L) + ...
+    -0.25 * diag(ones(L-1,1), 1) + ...
+    -0.25 * diag(ones(L-1,1), -1);
+% error_matrix(end,end) = 0;
+% error_matrix(end,end-1) = 0;
+% error_matrix(end-1,end) = 0;
+% error_matrix(end-1,end-1) = 0;
+% error_matrix(end-1,end-2) = 0;
+error_matrix_inv = inv(error_matrix);
+
 for i=1:cal_cycles
     thresholds = LSB_value * round(thresholds/LSB_value);
 %     analog_in = input((i-1)*cal_len+1:(i)*cal_len);
@@ -78,10 +88,12 @@ for i=1:cal_cycles
 
 %     
 %     % normalize, then ignore overflow bin when computing diffs:
-%     H_plus = H_plus / sum(H_plus);
-%     H_min  = H_min;
+    H_plus = H_plus / sum(H_plus);
+    H_min  = H_min / sum(H_min);
     
-    H_delta = H_plus(1:L) - H_min(1:L);   % use bins 0..31, discard overflow (bin 32)
+    % H_delta = (H_plus(1:L) - H_min(1:L))./(H_plus(1:L)+H_min(1:L));   % use bins 0..31, discard overflow (bin 32)
+
+    H_delta = (H_plus(1:L) - H_min(1:L));
 
    % Plot H_delta
 %     figure;
@@ -93,9 +105,25 @@ for i=1:cal_cycles
 %     xlabel('ADC output code');
 %     ylabel('Count');
 %     title('Histogram from H\_delta');
+% 
+    H_delta_matched = error_matrix\(H_delta.');
+%     % Plot H_delta_matched
+%     figure;
+%     b = bar(binCenters(1:end-1), H_delta_matched);   % <-- REMOVED 'hist'
+%     b.FaceColor = 'flat';          % enable per-bar colors
+%     b.CData = repmat([0 0.447 0.741], numel(H_delta_matched), 1);  % default color
+%     b.CData(3,:) = [1 0 0];        % recolor bar #4 red
+% %     b.CData(2,:) = [1 0 0];        % recolor bar #3 red
+%     xlabel('ADC output code');
+%     ylabel('Count');
+%     title('Histogram from H\_delta_matched');
 
    % Update thresholds to reduce nonlinearity
-   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)') > cal_cutoff) .* cal_constant.*H_delta(1:end-1)')./cal_len;
+   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)') > cal_cutoff) .* cal_constant.*H_delta(1:end-1)')./cal_len;
+   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)') > cal_cutoff) .* cal_constant.*H_delta(1:end-1)');
+
+   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta_matched(1:end-1)') > cal_cutoff) .* cal_constant.*H_delta_matched(1:end-1)')./cal_len;
+
 
    % --- Enforce monotonic thresholds (prevent crossing) ---
     % Minimum spacing between thresholds

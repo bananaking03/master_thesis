@@ -1,4 +1,4 @@
-function [digi_out, SNDRs, thresholds] = flash_adc_dither_sim_simple(input, cal_len, cal_cycles, cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow,  Vinc, N_bits, non_lin_f,N, input_test)
+function [digi_out, SNDRs, thresholds] = flash_adc_dither_sim_simple(input, cal_len, cal_cycles, cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow,  Vinc, N_bits, non_lin_f, lambda_reg, N, input_test)
 
 L = 2^N_bits;
 thresholds = [init_thresholds; Vhigh];   % append final overflow threshold
@@ -56,7 +56,22 @@ for i=1:cal_cycles
     H_plus = histcounts(D_plus, edges);
     H_min  = histcounts(D_min , edges);        % Hmin has bin 33????????????????????????????????
 
-    % Plot H_plus
+    if (H_min(end) > 0) 
+        H_plus(end-1) = 0; 
+        H_min(end) = 0;
+        error_matrix(end,end) = 0;
+        error_matrix(end-1,end) = 0;
+    end
+
+    if (min(analog_in_amp) < Vlow)
+        H_min(1) =0;
+        error_matrix(1,1) = 0;
+        error_matrix(2,1) = 0;
+    end
+
+    binCenters = edges(1:end-1) + diff(edges)/2;
+
+    % % Plot H_plus
     % figure;
     % b = bar(binCenters, H_plus);   % <-- REMOVED 'hist'
     % b.FaceColor = 'flat';          % enable per-bar colors
@@ -66,8 +81,8 @@ for i=1:cal_cycles
     % xlabel('ADC output code');
     % ylabel('Count');
     % title('Histogram from H\_plus');
-
-    % Plot H_min
+    % 
+    % % Plot H_min
     % figure;
     % b = bar(binCenters, H_min);    % <-- REMOVED 'hist'
     % b.FaceColor = 'flat';
@@ -83,11 +98,16 @@ for i=1:cal_cycles
 %     H_plus = H_plus / sum(H_plus);
 %     H_min  = H_min;
     m = round(Vinc / ((Vhigh - Vlow)/L));
-    
+
+    % normalize histograms (guard against empty bins)
+    H_plus = H_plus / sum(H_plus);
+    H_min  = H_min / sum(H_min);
+
+    % use the full histogram length (K == L or L+1 when overflow present)
     H_delta = (H_plus(1:L) - H_min(1:L)); %./ (H_plus(1:L) + H_min(1:L));   % use bins 0..31, discard overflow (bin 32)
     H_delta = H_delta(:);
 
-    H_delta(end-1:end) = [0 0];
+    % H_delta(end-1:end) = [0 0];
 
    % Plot H_delta
 %     figure;
@@ -123,8 +143,9 @@ for i=1:cal_cycles
     % H_delta_matched(end-1:end) = [0 0];
 %---------------------------------------------------------------------------
 
-    % H_delta_matched = error_matrix_inv*H_delta; !!!!!!!!!!!!!!!
-    % H_delta_matched = error_matrix\H_delta;
+    % H_delta_matched: build an error matrix sized to the histogram length
+    % error_matrix_K = 0.5 * eye(K) + -0.25 * diag(ones(K-1,1), 1) + -0.25 * diag(ones(K-1,1), -1);
+    H_delta_matched_full = (error_matrix + lambda_reg*eye(L))\H_delta;
 
     % Plot H_delta_matched
 %     figure;
@@ -138,8 +159,15 @@ for i=1:cal_cycles
 %     title('Histogram from H\_delta_matched');
 
    % Update thresholds to reduce nonlinearity
-   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta(1:end-1))./cal_len;
-   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta_matched(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta_matched(1:end-1))./(cal_len);
+   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta(1:end-1))./cal_len;
+   % thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta(1:end-1));
+
+   % Use matched result corresponding to nominal codes 0..L-1 for threshold updates
+   H_delta_matched = H_delta_matched_full(1:L);
+   thresholds(1:end-1) = thresholds(1:end-1) + ((abs(H_delta_matched(1:end-1)) > cal_cutoff) .* cal_constant.*H_delta_matched(1:end-1));
+   % thresholds(2:end-2) = thresholds(2:end-2) + ((abs(H_delta_matched(2:end-2)) > cal_cutoff) .* cal_constant.*H_delta_matched(2:end-2));
+
+   % thresholds(50:end-50) = thresholds(50:end-50) + ((abs(H_delta_matched(50:end-50)) > cal_cutoff) .* cal_constant.*H_delta_matched(50:end-50));
 
    % H_grad = [H_delta(1); diff(H_delta(:))];
    % H_grad = [diff(H_delta(:)); H_delta(end)];
@@ -195,7 +223,9 @@ for i=1:cal_cycles
     thresholds = max(thresholds, Vlow);
     thresholds(end) = Vhigh;  % maintain top reference
 
-    digi_out_test = flash_adc(input_test,N_bits,Vhigh,Vlow,thresholds(1:end));
+    input_test_non_lin = nonlin_fun(input_test);
+
+    digi_out_test = flash_adc(input_test_non_lin,N_bits,Vhigh,Vlow,thresholds(1:end));
     
     if cal_len >= 10000
         SNDRs(i) = calculate_SNDR(digi_out_test(end - 10000+1:end), input_test(end - 10000+1:end),N);
