@@ -1,0 +1,27 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+// Adds a fixed dither value when dither_in is logic high.
+// dither_in can be driven by the pseudo-random RTL dither_gen module.
+module dither_injection(vin, dither_in, vout);
+	parameter real dither_value = 1m;       // Added voltage when enabled (V).
+	parameter real vlogic_threshold = 0.9;  // Voltage interpreted as logic high.
+	parameter real td = 0.0;                 // Output delay.
+	parameter real trise = 1p;               // Output rise time.
+	parameter real tfall = 1p;               // Output fall time.
+
+	input vin;                               // Analog input signal.
+	input dither_in;                         // Digital dither control signal.
+	output vout;                             // Dithered analog output.
+	electrical vin, dither_in, vout;
+
+	real dithered_voltage;
+
+	analog begin
+		// Add dither_value for a high control bit; otherwise pass vin through.
+		dithered_voltage = V(vin) +
+			((V(dither_in) >= vlogic_threshold) ? dither_value : 0.0);
+
+		V(vout) <+ transition(dithered_voltage, td, trise, tfall);
+	end
+endmodule

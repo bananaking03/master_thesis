@@ -1,0 +1,37 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+// Unary CDAC with one control signal per unit capacitor.
+// Parameters are fixed when the module is instantiated; inputs can change
+// during simulation. N_BITS controls the number of unary units: 2**N_BITS.
+module CDAC(ctrl, vout);
+	parameter integer N_BITS = 4;       // Number of bits; creates 2**N_BITS units.
+	parameter real vlogic_threshold = 0.9; // Voltage interpreted as logic high.
+	parameter real vout_min = -1.0;      // Output for zero enabled units (V).
+	parameter real vout_max = 1.0;       // Output for all enabled units (V).
+	parameter real td = 0.0;             // Output delay.
+	parameter real trise = 1p;           // Output rise time.
+	parameter real tfall = 1p;           // Output fall time.
+
+	input [2**N_BITS-1:0] ctrl;         // One electrical control per unit.
+	output vout;                        // CDAC output voltage.
+	electrical ctrl, vout;
+
+	integer i;
+	integer enabled_units;
+	real dac_voltage;
+
+	analog begin
+		enabled_units = 0;
+		for (i = 0; i < 2**N_BITS; i = i + 1) begin
+			// Count how many unary unit capacitors are connected to vref.
+			if (V(ctrl[i]) >= vlogic_threshold)
+				enabled_units = enabled_units + 1;
+		end
+
+		dac_voltage = vout_min + (vout_max - vout_min) *
+					  enabled_units / (2.0**N_BITS);
+
+		V(vout) <+ transition(dac_voltage, td, trise, tfall);
+	end
+endmodule

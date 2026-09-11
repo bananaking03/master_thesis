@@ -1,0 +1,23 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+// Simple behavioral comparator: out goes high when inp - inn >= vth.
+module comparator(inp, inn, out);
+	input inp, inn;
+	output out;
+	electrical inp, inn, out;
+
+	parameter real vth = 0.0;
+	parameter real vout_low = 0.0;
+	parameter real vout_high = 1.8;
+	parameter real td = 0.0;
+	parameter real trise = 1p;
+	parameter real tfall = 1p;
+
+	analog begin
+		V(out) <+ transition(
+			(V(inp) - V(inn) >= vth) ? vout_high : vout_low,
+			td, trise, tfall
+		);
+	end
+endmodule
