@@ -6,7 +6,10 @@ module calibration_module #(
     parameter CALIBRATION_LENGTH = 1800,
     parameter CAL_CONSTANT = 0.1, // scaling constant for histogram difference to threshold update (kept for compatibility)
     parameter integer CAL_CONSTANT_NUM = 1, // integer numerator for fixed-point scaling (CAL_CONSTANT_NUM/CAL_CONSTANT_DEN)
-    parameter integer CAL_CONSTANT_DEN = 10 // integer denominator for fixed-point scaling (default 1/10 = 0.1)
+    parameter integer CAL_CONSTANT_DEN = 10, // integer denominator for fixed-point scaling (default 1/10 = 0.1)
+    parameter integer LAMBDA_REG_NUM = 1, // lambda_reg numerator (default 1/10 = 0.1)
+    parameter integer LAMBDA_REG_DEN = 10,
+    parameter integer SOLVER_FRAC_BITS = 16 // fractional bits used by the matrix solver
 )(
     input wire clk,
     input wire rst_n,
@@ -87,6 +90,46 @@ module calibration_module #(
         end
     endgenerate
 
+    // MATLAB solves (error_matrix + lambda_reg*I) \ H_delta.
+    // The matrix is tridiagonal, with 0.5 + lambda_reg on the diagonal and
+    // -0.25 on both neighboring diagonals. Multiplying the matrix by
+    // 4*LAMBDA_REG_DEN gives integer coefficients without changing the solution.
+    localparam integer MATRIX_DIAG = (2 * LAMBDA_REG_DEN) + (4 * LAMBDA_REG_NUM);
+    localparam integer MATRIX_OFF_DIAG = -LAMBDA_REG_DEN;
+
+    // Fixed-point arrays used by the Thomas algorithm for A*x = H_delta.
+    reg signed [63:0] solver_cprime [0:NUM_HIST-1];
+    reg signed [63:0] solver_dprime [0:NUM_HIST-1];
+    reg signed [63:0] matched_histogram [0:NUM_HIST-1];
+    integer solver_index;
+    reg signed [63:0] solver_denom;
+    reg signed [63:0] solver_rhs;
+
+    always @(*) begin
+        // Forward elimination for the tridiagonal error matrix.
+        solver_cprime[0] = (MATRIX_OFF_DIAG <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
+        solver_rhs = $signed(histogram_diff[0]) <<< SOLVER_FRAC_BITS;
+        solver_dprime[0] = (solver_rhs <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
+
+        for (solver_index = 1; solver_index < NUM_HIST; solver_index = solver_index + 1) begin
+            solver_denom = MATRIX_DIAG -
+                           (MATRIX_OFF_DIAG * solver_cprime[solver_index - 1] >>> SOLVER_FRAC_BITS);
+            solver_cprime[solver_index] =
+                (MATRIX_OFF_DIAG <<< SOLVER_FRAC_BITS) / solver_denom;
+            solver_rhs = ($signed(histogram_diff[solver_index]) <<< SOLVER_FRAC_BITS) -
+                         (MATRIX_OFF_DIAG * solver_dprime[solver_index - 1] >>> SOLVER_FRAC_BITS);
+            solver_dprime[solver_index] =
+                (solver_rhs <<< SOLVER_FRAC_BITS) / solver_denom;
+        end
+
+        // Back substitution produces the regularized histogram difference.
+        matched_histogram[NUM_HIST - 1] = solver_dprime[NUM_HIST - 1];
+        for (solver_index = NUM_HIST - 2; solver_index >= 0; solver_index = solver_index - 1) begin
+            matched_histogram[solver_index] = solver_dprime[solver_index] -
+                (solver_cprime[solver_index] * matched_histogram[solver_index + 1] >>> SOLVER_FRAC_BITS);
+        end
+    end
+
     // Registers to store the thresholds
     reg [EXTRA_WIDTH_FROM_ALGO_TO_DAC+1:0] delta_thresholds_reg [0:NUM_HIST-1];
 
@@ -104,7 +147,9 @@ module calibration_module #(
                 integer k;
                 signed [EXTRA_WIDTH_FROM_ALGO_TO_DAC+1:0] signed_result;
                 for (k = 0; k < NUM_HIST; k = k + 1) begin
-                    signed_result = $signed({1'b0, delta_thresholds_reg[k]}) + histogram_diff[k];
+                    // Convert the fixed-point solver result back to an integer.
+                    signed_result = $signed({1'b0, delta_thresholds_reg[k]}) +
+                                    (matched_histogram[k] >>> SOLVER_FRAC_BITS);
                     if (signed_result < 0) // prevent overflow and underflow of thresholds
                         delta_thresholds_reg[k] <= {EXTRA_WIDTH_FROM_ALGO_TO_DAC+2{1'b0}};
                     else
