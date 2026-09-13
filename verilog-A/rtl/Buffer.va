@@ -1,18 +1,21 @@
 `include "constants.vams"
 `include "disciplines.vams"
 
-// Behavioral buffer with a polynomial transfer characteristic.
+// Sampled behavioral buffer with a polynomial transfer characteristic.
 // The default coefficients match the MATLAB expression:
 // polyval(fliplr([0 0.6 0 0.4]), Vin) = 0.6*Vin + 0.4*Vin^3.
-module Buffer(vin, vout);
+// The buffer drives vout only while clk is high, modeling a sampling switch.
+module Buffer(vin, clk, vout);
 	parameter real a0 = 0.0; // Constant coefficient.
 	parameter real a1 = 0.6; // Linear coefficient.
 	parameter real a2 = 0.0; // Quadratic coefficient.
 	parameter real a3 = 0.4; // Cubic coefficient.
+	parameter real vclock_threshold = 0.9; // Voltage interpreted as clock high.
 
 	input vin;               // Analog input voltage.
+	input clk;               // Sampling clock.
 	output vout;             // Nonlinear buffered output voltage.
-	electrical vin, vout;
+	electrical vin, clk, vout;
 
 	real vin_value;
 	real buffer_voltage;
@@ -20,12 +23,14 @@ module Buffer(vin, vout);
 	analog begin
 		vin_value = V(vin);
 
-		// Evaluate the polynomial in ascending coefficient order,
-		// matching MATLAB's polyval(fliplr(non_lin_parameters), Vin).
-		buffer_voltage = a0 + a1 * vin_value +
-			 a2 * vin_value * vin_value +
-			 a3 * vin_value * vin_value * vin_value;
+		if (V(clk) >= vclock_threshold) begin
+			// Evaluate the polynomial while the sampling switch is on.
+			buffer_voltage = a0 + a1 * vin_value +
+				 a2 * vin_value * vin_value +
+				 a3 * vin_value * vin_value * vin_value;
 
-		V(vout) <+ buffer_voltage;
+			V(vout) <+ buffer_voltage;
+		end
+		// When clk is low, there is no contribution: vout is disconnected.
 	end
 endmodule
