@@ -5,20 +5,21 @@
 // Parameters are fixed when the module is instantiated; inputs can change
 // during simulation. N_BITS controls the number of unary units: 2**N_BITS.
 // The CDAC drives vout only while enable is high.
-module CDAC(ctrl, enable, vout);
-	parameter integer N_BITS = 4;       // Number of bits; creates 2**N_BITS units.
-	parameter real vlogic_threshold = 0.9; // Voltage interpreted as logic high.
-	parameter real venable_threshold = 0.9; // Voltage interpreted as enable high.
-	parameter real vout_min = -1.0;      // Output for zero enabled units (V).
-	parameter real vout_max = 1.0;       // Output for all enabled units (V).
-	parameter real td = 0.0;             // Output delay.
-	parameter real trise = 1p;           // Output rise time.
-	parameter real tfall = 1p;           // Output fall time.
+module CDAC #(
+	parameter integer N_BITS = 4,          // Number of bits; creates 2**N_BITS units.
+	parameter real vlogic_threshold = 0.9, // Voltage interpreted as logic high.
+	parameter real venable_threshold = 0.9, // Voltage interpreted as enable high.
+	parameter real vout_min = -1.0,         // Output for zero enabled units (V).
+	parameter real vout_max = 1.0,          // Output for all enabled units (V).
+	parameter real td = 0.0,                // Output delay.
+	parameter real trise = 1p,              // Output rise time.
+	parameter real tfall = 1p               // Output fall time.
+) (ctrl, enable, vout);
 
-	input [2**N_BITS-1:0] ctrl;         // One electrical control per unit.
+	input [(1 << N_BITS)-1:0] ctrl;     // One electrical control per unit.
 	input enable;                       // Enables the CDAC output.
 	output vout;                        // CDAC output voltage.
-	electrical [2**N_BITS-1:0] ctrl;    // Preserve the control bus width.
+	electrical [(1 << N_BITS)-1:0] ctrl; // Preserve the control bus width.
 	electrical enable;
 	electrical vout;
 
@@ -27,12 +28,12 @@ module CDAC(ctrl, enable, vout);
 	// Each enabled unit contributes one equal voltage increment.
 	// A compile-time generate index is required for analog vector access.
 	generate
-		for (unit = 0; unit < 2**N_BITS; unit = unit + 1) begin : gen_unit
+		for (unit = 0; unit < (1 << N_BITS); unit = unit + 1) begin : gen_unit
 			analog begin
 				if ((V(enable) >= venable_threshold) &&
 					(V(ctrl[unit]) >= vlogic_threshold)) begin
 					V(vout) <+ transition(
-						(vout_max - vout_min) / (2.0**N_BITS),
+						(vout_max - vout_min) / (1 << N_BITS),
 						td, trise, tfall
 					);
 				end
