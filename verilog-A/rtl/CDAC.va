@@ -29,19 +29,20 @@ module CDAC(ctrl, enable, vout);
 	generate
 		for (unit = 0; unit < 2**N_BITS; unit = unit + 1) begin : gen_unit
 			analog begin
-				V(vout) <+ transition(
-					(V(enable) >= venable_threshold) ?
-						((V(ctrl[unit]) >= vlogic_threshold) ?
-					(vout_max - vout_min) / (2.0**N_BITS) : 0.0,
-						0.0),
-					td, trise, tfall
-				);
+				if ((V(enable) >= venable_threshold) &&
+					(V(ctrl[unit]) >= vlogic_threshold)) begin
+					V(vout) <+ transition(
+						(vout_max - vout_min) / (2.0**N_BITS),
+						td, trise, tfall
+					);
+				end
 			end
 		end
 	endgenerate
 
 	// Establish the lower endpoint when no unary units are enabled.
 	analog begin
-		V(vout) <+ (V(enable) >= venable_threshold) ? vout_min : 0.0;
+		if (V(enable) >= venable_threshold)
+			V(vout) <+ vout_min;
 	end
 endmodule
