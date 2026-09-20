@@ -5,12 +5,10 @@
 // Parameters are fixed when the module is instantiated; inputs can change
 // during simulation. N_BITS controls the number of unary units: 2**N_BITS.
 // The CDAC drives vout only while enable is high.
-module CDAC(ctrl, enable, vout);
+module CDAC(ctrl, sample_clk, Vref, gnd, vout);
 	parameter integer N_BITS = 4;          // Number of active units: 2**N_BITS.
 	parameter real vlogic_threshold = 0.9;  // Voltage interpreted as logic high.
 	parameter real venable_threshold = 0.9; // Voltage interpreted as enable high.
-	parameter real vout_min = -1.0;         // Output for zero enabled units (V).
-	parameter real vout_max = 1.0;          // Output for all enabled units (V).
 	parameter real td = 0.0;                // Output delay.
 	parameter real trise = 1p;              // Output rise time.
 	parameter real tfall = 1p;              // Output fall time.
@@ -18,11 +16,11 @@ module CDAC(ctrl, enable, vout);
 	// Fixed width keeps the symbol generator independent of N_BITS.
 	// The first 2**N_BITS bits are used; maximum supported N_BITS is 10.
 	input [1023:0] ctrl;                  // One electrical control per unit.
-	input enable;                       // Enables the CDAC output.
-	output vout;                        // CDAC output voltage.
+	input sample_clk;                      // Sample clock for the CDAC.
+	input enable, Vref, gnd;                       // Enables the CDAC output.
+	inout vout;                        // CDAC output voltage.
 	electrical [1023:0] ctrl;            // Preserve the control bus width.
-	electrical enable;
-	electrical vout;
+	electrical sample, vout;
 
 	genvar unit;
 
@@ -34,7 +32,7 @@ module CDAC(ctrl, enable, vout);
 				if ((V(enable) >= venable_threshold) &&
 					(V(ctrl[unit]) >= vlogic_threshold)) begin
 					V(vout) <+ transition(
-						(vout_max - vout_min) / (1 << N_BITS),
+						Vsample + ((V(Vref) - V(gnd)) / (1 << N_BITS)),
 						td, trise, tfall
 					);
 				end
@@ -44,7 +42,10 @@ module CDAC(ctrl, enable, vout);
 
 	// Establish the lower endpoint when no unary units are enabled.
 	analog begin
-		if (V(enable) >= venable_threshold)
-			V(vout) <+ vout_min;
+		@cross(V(enable), venable_threshold) begin
+			if (V(enable) < venable_threshold) begin
+				Vsample = V(vout);
+			end
+		end
 	end
 endmodule
