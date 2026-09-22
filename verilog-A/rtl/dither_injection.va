@@ -4,7 +4,7 @@
 // Adds a fixed dither value when dither_in is logic high.
 // dither_in can be driven by the pseudo-random RTL dither_gen module.
 module dither_injection(vin, dither_in, vout);
-	parameter real dither_value = 1m;       // Added voltage when enabled (V).
+	parameter real dither_value = 100m;       // Added voltage when enabled (V).
 	parameter real vlogic_threshold = 0.9;  // Voltage interpreted as logic high.
 	parameter real td = 0.0;                 // Output delay.
 	parameter real trise = 1p;               // Output rise time.

@@ -1,51 +1,321 @@
+// `include "constants.vams"
+// `include "disciplines.vams"
+
+// // Unary CDAC with one control signal per unit capacitor.
+// // Parameters are fixed when the module is instantiated; inputs can change
+// // during simulation. N_BITS controls the number of unary units: 2**N_BITS.
+// // The CDAC drives vout only while enable is high.
+// module CDAC(ctrl, sample_clk, Vref, gnd, vout);
+// 	parameter integer N_BITS = 4;          // Number of active units: 2**N_BITS.
+// 	parameter real vlogic_threshold = 0.9;  // Voltage interpreted as logic high.
+// 	parameter real venable_threshold = 0.9; // Voltage interpreted as enable high.
+// 	parameter real td = 0.0;                // Output delay.
+// 	parameter real trise = 1p;              // Output rise time.
+// 	parameter real tfall = 1p;              // Output fall time.
+
+// 	// Fixed width keeps the symbol generator independent of N_BITS.
+// 	// The first 2**N_BITS bits are used; maximum supported N_BITS is 10.
+// 	input [1023:0] ctrl;                  // One electrical control per unit.
+// 	input sample_clk;                      // Sample clock for the CDAC.
+// 	input enable, Vref, gnd;                       // Enables the CDAC output.
+// 	inout vout;                        // CDAC output voltage.
+// 	electrical [1023:0] ctrl;            // Preserve the control bus width.
+// 	electrical sample, vout;
+
+// 	genvar unit;
+
+// 	// Each enabled unit contributes one equal voltage increment.
+// 	// A compile-time generate index is required for analog vector access.
+// 	generate
+// 		for (unit = 0; unit < (1 << N_BITS); unit = unit + 1) begin : gen_unit
+// 			analog begin
+// 				if ((V(enable) >= venable_threshold) &&
+// 					(V(ctrl[unit]) >= vlogic_threshold)) begin
+// 					V(vout) <+ transition(
+// 						Vsample + ((V(Vref) - V(gnd)) / (1 << N_BITS)),
+// 						td, trise, tfall
+// 					);
+// 				end
+// 			end
+// 		end
+// 	endgenerate
+
+// 	// Establish the lower endpoint when no unary units are enabled.
+// 	analog begin
+// 		@cross(V(enable), venable_threshold) begin
+// 			if (V(enable) < venable_threshold) begin
+// 				Vsample = V(vout);
+// 			end
+// 		end
+// 	end
+// endmodule
+
+// `include "constants.vams"
+// `include "disciplines.vams"
+
+// module DAC_un(ctrl, sample_clk, Vref, gnd, enable, vout);
+
+//     parameter integer N_BITS = 4;
+
+//     parameter real vlogic_threshold = 0.9;
+//     parameter real venable_threshold = 0.9;
+//     parameter real vclk_threshold = 0.5;
+// 	parameter real td = 0;
+// 	parameter real trise = 0;
+// 	parameter real tfall = 0;
+
+//     input [1023:0] ctrl;
+//     input sample_clk;
+//     input Vref;
+//     input gnd;
+//     input enable;
+//     inout vout;
+
+//     electrical [1023:0] ctrl;
+//     electrical sample_clk;
+//     electrical Vref;
+//     electrical gnd;
+//     electrical enable;
+//     electrical vout;
+
+//     genvar unit;
+//     integer i;
+
+//     real Vsample;
+//     real unit_on [0:1023];
+//     real dac_code;
+
+//     // ------------------------------------------------------------
+//     // Determine whether each unary unit is ON
+//     // ------------------------------------------------------------
+//     generate
+
+//         for (unit = 0;
+//              unit < (1 << N_BITS);
+//              unit = unit + 1) begin : gen_unit
+
+//             analog begin
+
+//                 unit_on[unit] =
+//                     (V(ctrl[unit]) >= vlogic_threshold) ? 1.0 : 0.0;
+
+//             end
+
+//         end
+
+//     endgenerate
+
+
+//     // ------------------------------------------------------------
+//     // Sample + calculate DAC output
+//     // ------------------------------------------------------------
+//     analog begin
+
+//         @(initial_step) begin
+//             Vsample = V(vout, gnd);
+//         end
+
+//         @(cross(V(sample_clk) - vclk_threshold, +1)) begin
+//             Vsample = V(vout, gnd);
+//         end
+
+//         // Sum the unary elements
+//         dac_code = 0.0;
+
+//         for (i = 0; i < (1 << N_BITS); i = i + 1) begin
+//             dac_code = dac_code + unit_on[i];
+//         end
+
+//         // Single voltage contribution
+// //        if (V(enable) >= venable_threshold) begin
+
+// //            V(vout) <+
+// //                Vsample
+// //                + dac_code *
+// //                  ((V(Vref) - V(gnd)) / (1 << N_BITS));
+// 			V(vout) <+ transition(
+// 			    Vsample + dac_code * ((V(Vref) - V(gnd)) / (1 << N_BITS)),
+// 			    td, trise, tfall
+// 			);
+// 			//V(vout) <+ 0.5;
+
+// //        end
+
+//     end
+
+// endmodule
+
+// `include "constants.vams"
+// `include "disciplines.vams"
+
+// module DAC_un(ctrl, sample_clk, Vref, gnd, enable, vout);
+
+//     parameter integer N_BITS = 4;
+
+//     parameter real vlogic_threshold = 0.9;
+//     parameter real venable_threshold = 0.9;
+//     parameter real vclk_threshold = 0.5;
+// 	parameter real td = 0;
+// 	parameter real trise = 0;
+// 	parameter real tfall = 0;
+// 	parameter real Rdrive = 1000k;
+
+//     input [1023:0] ctrl;
+//     input sample_clk;
+//     input Vref;
+//     input gnd;
+//     input enable;
+//     inout vout;
+
+//     electrical [1023:0] ctrl;
+//     electrical sample_clk;
+//     electrical Vref;
+//     electrical gnd;
+//     electrical enable;
+//     electrical vout;
+
+//    real Vsample;
+// real dac_code;
+// real unit_on [0:1023];
+// real vout_target;
+// real Idrive;
+
+// integer i;
+// genvar unit;
+
+// generate
+//     for (unit = 0; unit < (1 << N_BITS); unit = unit + 1) begin : gen_unit
+//         analog begin
+//             unit_on[unit] =
+//                 (V(ctrl[unit]) >= vlogic_threshold) ? 1.0 : 0.0;
+//         end
+//     end
+// endgenerate
+
+// analog begin
+
+//     @(initial_step) begin
+//         Vsample = 0.0;
+// 		vout_target = 0.0;
+// 		V(vout,gnd) <+ 0.0;
+// 	end
+
+// 	@cross(V(sample_clk)-vclk_threshold,-1) begin
+// 		Vsample = V(vout,gnd);
+// 	end
+
+//     // Sampling phase
+//     if (V(sample_clk) >= vclk_threshold) begin
+//         //Vsample = V(vout, gnd);
+// 		//vout_target = V(vout);
+// 		I(vout,gnd) <+ 0;
+//     end
+
+//     // Hold / DAC phase
+//     else begin
+
+//         dac_code = 0.0;
+
+//         for (i = 0; i < (1 << N_BITS); i = i + 1)
+//             dac_code = dac_code + unit_on[i];
+
+// 		Vsample = 0;
+// 		vout_target = Vsample + dac_code *((V(Vref) - V(gnd)) / (1 << N_BITS));
+// 		vout_target = 0.4;
+// 		I(vout,gnd) <+ (vout_target - V(vout,gnd))/Rdrive;
+//     end
+
+// //	V(vout) <+ transition(
+// //            vout_target,
+// //            td,
+// //            trise,
+// //            tfall
+// //        );
+// //	I(vout) <+ Idrive;
+
+// end
+
+// endmodule
+
 `include "constants.vams"
 `include "disciplines.vams"
 
-// Unary CDAC with one control signal per unit capacitor.
-// Parameters are fixed when the module is instantiated; inputs can change
-// during simulation. N_BITS controls the number of unary units: 2**N_BITS.
-// The CDAC drives vout only while enable is high.
-module CDAC(ctrl, sample_clk, Vref, gnd, vout);
-	parameter integer N_BITS = 4;          // Number of active units: 2**N_BITS.
-	parameter real vlogic_threshold = 0.9;  // Voltage interpreted as logic high.
-	parameter real venable_threshold = 0.9; // Voltage interpreted as enable high.
-	parameter real td = 0.0;                // Output delay.
-	parameter real trise = 1p;              // Output rise time.
-	parameter real tfall = 1p;              // Output fall time.
+module DAC_un(ctrl, sample_clk, Vref, gnd, enable, vout);
 
-	// Fixed width keeps the symbol generator independent of N_BITS.
-	// The first 2**N_BITS bits are used; maximum supported N_BITS is 10.
-	input [1023:0] ctrl;                  // One electrical control per unit.
-	input sample_clk;                      // Sample clock for the CDAC.
-	input enable, Vref, gnd;                       // Enables the CDAC output.
-	inout vout;                        // CDAC output voltage.
-	electrical [1023:0] ctrl;            // Preserve the control bus width.
-	electrical sample, vout;
+    parameter integer N_BITS = 4;
 
-	genvar unit;
+    parameter real vlogic_threshold = 0.9;
+    parameter real vclk_threshold = 0.5;
+    parameter real Rdrive = 1k;
 
-	// Each enabled unit contributes one equal voltage increment.
-	// A compile-time generate index is required for analog vector access.
-	generate
-		for (unit = 0; unit < (1 << N_BITS); unit = unit + 1) begin : gen_unit
-			analog begin
-				if ((V(enable) >= venable_threshold) &&
-					(V(ctrl[unit]) >= vlogic_threshold)) begin
-					V(vout) <+ transition(
-						Vsample + ((V(Vref) - V(gnd)) / (1 << N_BITS)),
-						td, trise, tfall
-					);
-				end
-			end
-		end
-	endgenerate
+    input [1023:0] ctrl;
+    input sample_clk;
+    input Vref;
+    input gnd;
+    input enable;
+    inout vout;
 
-	// Establish the lower endpoint when no unary units are enabled.
-	analog begin
-		@cross(V(enable), venable_threshold) begin
-			if (V(enable) < venable_threshold) begin
-				Vsample = V(vout);
-			end
-		end
-	end
+    electrical [1023:0] ctrl;
+    electrical sample_clk;
+    electrical Vref;
+    electrical gnd;
+    electrical enable;
+    electrical vout;
+
+    real dac_code;
+    real vout_target;
+    real unit_on [0:1023];
+	real Vsample;
+
+    integer i;
+    genvar unit;
+
+    // Convert each analog control input into a 0/1 value
+    generate
+        for (unit = 0; unit < (1 << N_BITS); unit = unit + 1) begin : gen_unit
+
+            analog begin
+                unit_on[unit] =
+                    (V(ctrl[unit],gnd) >= vlogic_threshold) ? 1.0 : 0.0;
+            end
+
+        end
+    endgenerate
+
+
+    analog begin	
+
+        // Calculate DAC code
+        dac_code = 0.0;
+
+        for (i = 0; i < (1 << N_BITS); i = i + 1)
+            dac_code = dac_code + unit_on[i];
+
+
+        // Calculate target voltage
+        vout_target =
+            Vsample + dac_code * V(Vref,gnd) / (1 << N_BITS);
+
+
+        // Drive phase
+        if (V(sample_clk,gnd) < vclk_threshold) begin
+
+            // Current flows from Vout toward the target
+            I(vout,gnd) <+
+                (V(vout,gnd) - vout_target) / Rdrive;
+
+        end
+
+        // Sampling / hold phase
+        else begin
+			
+			Vsample = V(vout,gnd);
+
+            // High impedance
+            I(vout,gnd) <+ 0.0;
+
+        end
+
+    end
+
 endmodule

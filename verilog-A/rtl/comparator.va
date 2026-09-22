@@ -1,23 +1,51 @@
+// VerilogA for thesis, comparator_strongArm, veriloga
+
 `include "constants.vams"
 `include "disciplines.vams"
 
-// Simple behavioral comparator: out goes high when inp - inn >= vth.
-module comparator(inp, inn, out);
-	input inp, inn;
-	output out;
-	electrical inp, inn, out;
+module comparator_strongArm(CK, Inn, Inp, Outp, VSS, Vdd);
+	inout CK;
+	electrical CK;
+	inout Inn;
+	electrical Inn;
+	inout Inp;
+	electrical Inp;
+	inout Outp;
+	electrical Outp;
+	inout VSS;
+	electrical VSS;
+	inout Vdd;
+	electrical Vdd;
 
 	parameter real vth = 0.0;
-	parameter real vout_low = 0.0;
-	parameter real vout_high = 1.8;
 	parameter real td = 0.0;
 	parameter real trise = 1p;
 	parameter real tfall = 1p;
 
+	integer decision;
+
 	analog begin
-		V(out) <+ transition(
-			(V(inp) - V(inn) >= vth) ? vout_high : vout_low,
-			td, trise, tfall
-		);
+		// Reset/precharge when clock goes low
+        @(cross(V(CK) - 0.5, -1)) begin
+            decision = 1;
+        end
+
+        // Evaluate when clock goes high
+        @(cross(V(CK) - 0.5, +1)) begin
+            if (V(Inp) - V(Inn) >= vth)
+                decision = 1;
+            else
+                decision = 0;
+        end
+
+        V(Outp) <+
+            transition(
+                decision ? V(Vdd) : V(VSS),
+                td,
+                trise,
+                tfall
+            );
 	end
+
+
 endmodule
