@@ -2,14 +2,14 @@
 // Synthesizable SAR controller that drives CDAC selection bits and sampling phase
 module sar_controller_hw #(
     parameter N = 10,
-    parameter SETTLE_CYCLES = 2
+    parameter SETTLE_CYCLES = 0
 )(
     input  wire             clk,
     input  wire             rst_n,
     input  wire             start,
     input  wire             cmp,          // comparator result: 1 if Vin >= Vdac
-    output reg  [2**N-1:0]     cdac_bits,    // drive switches: 1 -> connect corresponding cap to Vref (trial)
-	output wire  [2**N-1:0]  neg_cdac_bits,
+    output reg  [2**(N-1)-1:0]     cdac_bits,    // drive switches: 1 -> connect corresponding cap to Vref (trial)
+	output wire  [2**(N-1)-1:0]  neg_cdac_bits,
     output reg              sample,       // sampling phase (asserted during sample)
     output reg              busy,
     output reg              done
@@ -24,7 +24,7 @@ module sar_controller_hw #(
     reg [1:0] state, next_state;
     reg [$clog2(N)-1:0] bit_idx;
     reg [$clog2(SETTLE_CYCLES+1)-1:0] settle_cnt;
-    reg [N-1:0] cdac_bits_bin;
+    signed reg [N-1:0] cdac_bits_bin;
 
     integer i, code_val;
 
@@ -56,7 +56,8 @@ module sar_controller_hw #(
                     // assert sampling for one cycle
                     sample <= 1'b1;
                     // prepare first trial bit and settle counter on next cycle
-                    cdac_bits_bin <= {N{1'b0}} | (1 << bit_idx);
+                    //cdac_bits_bin <= {N{1'b0}} | (1 << bit_idx);
+                    cdac_bits_bin <= {N{1'b0}};
                     settle_cnt <= SETTLE_CYCLES;
                     state <= CONVERT;
                 end
@@ -69,15 +70,25 @@ module sar_controller_hw #(
                         // comparator sampled, update the bit and prepare next trial
                         if (bit_idx == 0) begin
                             // final bit: set or clear LSB according to comparator
-                            if (cmp) begin
+                            if (cdac_bots_bin[0] ^ cmp) begin
                                 cdac_bits_bin <= cdac_bits_bin | (1 << bit_idx);
                             end else begin
                                 cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx);
                             end
                             state <= DONE;
+                        end elif (bit_idx == N) begin
+                            // first bit: set or clear MSB according to comparator, first bit indicates the sign and set next trial bit (bit_idx-1)
+                            if (cmp) begin
+                                cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx) | (1 << (bit_idx - 1));
+                            end else begin
+                                cdac_bits_bin <= cdac_bits_bin | (1 << bit_idx) | (1 << (bit_idx - 1));
+                            end
+                            bit_idx <= bit_idx - 1;
+                            settle_cnt <= SETTLE_CYCLES;
+                            state <= CONVERT;
                         end else begin
                             // set/clear current bit, and set next trial bit (bit_idx-1)
-                            if (cmp) begin
+                            if (cdac_bots_bin[0] ^ cmp) begin
                                 cdac_bits_bin <= (cdac_bits_bin | (1 << bit_idx)) | (1 << (bit_idx - 1));
                             end else begin
                                 cdac_bits_bin <= (cdac_bits_bin & ~(1 << bit_idx)) | (1 << (bit_idx - 1));
@@ -102,9 +113,10 @@ module sar_controller_hw #(
         end
     end
 
+    wire [2**(N-1)-1:0] ns_cdac_bits;
     // Convert the binary-style SAR decision word into a unary CDAC selection vector.
     always @(*) begin
-        cdac_bits = {2**N{1'b0}};
+        ns_cdac_bits = {2**(N-1){1'b0}};
         code_val = 0;
 
         for (i = 0; i < N; i = i + 1) begin
@@ -113,15 +125,25 @@ module sar_controller_hw #(
             end
         end
 
-        for (i = 0; i < 2**N; i = i + 1) begin
+        for (i = 0; i < 2**(N-1); i = i + 1) begin
             if (i < code_val) begin
-                cdac_bits[i] = 1'b1;
+                ns_cdac_bits[i] = 1'b1;
             end else begin
-                cdac_bits[i] = 1'b0;
+                ns_cdac_bits[i] = 1'b0;
             end
+        end
+
+        if (cdac_bits_bin[0] == 1'b1) begin
+            // negative code: invert the bits
+            neg_cdac_bits = ns_cdac_bits;
+            cdac_bits = {2**(N-1){1'b0}};
+        end else begin
+            // positive code: use the bits as is
+            cdac_bits = ns_cdac_bits;
+            neg_cdac_bits = {2**(N-1){1'b0}};
         end
     end
 
-	assign neg_cdac_bits = ~cdac_bits;
+	//assign neg_cdac_bits = ~cdac_bits;
 
 endmodule
