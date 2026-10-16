@@ -16,6 +16,7 @@ module calibration_module #(
     input wire [ALGO_DATA_WIDTH-1:0] data_in,
     input wire [DAC_CTRL_WIDTH-1:0] DAC_ctrl_in,
     output wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out,
+    output wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out_neg,
     output wire dither_out
 );
 

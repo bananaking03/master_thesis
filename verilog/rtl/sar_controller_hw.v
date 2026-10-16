@@ -1,8 +1,7 @@
 `timescale 1ns/1ps
 // Synthesizable SAR controller that drives CDAC selection bits and sampling phase
 module SAR_logic #(
-    parameter N = 10,
-    parameter SETTLE_CYCLES = 1
+    parameter N = 10
 )(
     input  wire             clk,
     input  wire             rst_n,
@@ -23,8 +22,8 @@ module SAR_logic #(
 
     reg [1:0] state, next_state;
     reg [$clog2(N)-1:0] bit_idx;
-    reg [$clog2(SETTLE_CYCLES+1)-1:0] settle_cnt;
     reg signed [N-1:0] cdac_bits_bin;
+	reg signed [N-1:0] result;
 
     integer i, code_val;
 
@@ -37,7 +36,7 @@ module SAR_logic #(
             busy <= 1'b0;
             done <= 1'b0;
             bit_idx <= N>0 ? N-1 : 0;
-            settle_cnt <= 0;
+			result <= {N{1'b0}};
         end else begin
             case (state)
                 IDLE: begin
@@ -48,64 +47,57 @@ module SAR_logic #(
                         busy <= 1'b1;
                         cdac_bits_bin <= {N{1'b0}};
                         bit_idx <= N>0 ? N-1 : 0;
+                        sample <= 1'b1;
                         state <= SAMPLE;
                     end
                 end
 
                 SAMPLE: begin
                     // assert sampling for one cycle
-                    sample <= 1'b1;
-                    // prepare first trial bit and settle counter on next cycle
+                    sample <= 1'b0;
                     //cdac_bits_bin <= {N{1'b0}} | (1 << bit_idx);
                     cdac_bits_bin <= {N{1'b0}};
-                    settle_cnt <= SETTLE_CYCLES;
 					done <= 1'b0;
                     state <= CONVERT;
                 end
 
                 CONVERT: begin
-                    sample <= 1'b0;
-                    if (settle_cnt > 0 & bit_idx == N-1) begin
-                        settle_cnt <= settle_cnt - 1;
-                    end else begin
-                        // comparator sampled, update the bit and prepare next trial
-                        if (bit_idx == 0) begin
-                            // final bit: set or clear LSB according to comparator
-                            if (cdac_bits_bin[N-1] ^ cmp) begin
-                                cdac_bits_bin <= cdac_bits_bin | (1 << bit_idx);
-                            end else begin
-                                cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx);
-                            end
-							done <= 1'b1;
-							if (start) begin
-								state <= SAMPLE;
-								cdac_bits_bin <= {N{1'b0}};
-                     				bit_idx <= N>0 ? N-1 : 0;
-								busy <= 1'b1;
-							end else begin
-                            		state <= DONE;
-							end
-                        end else if (bit_idx == N-1) begin
-                            // first bit: set or clear MSB according to comparator, first bit indicates the sign and set next trial bit (bit_idx-1)
-                            if (cmp) begin
-                                cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx) | (1 << (bit_idx - 1));
-                            end else begin
-                                cdac_bits_bin <= cdac_bits_bin | (1 << bit_idx) | (1 << (bit_idx - 1));
-                            end
-                            bit_idx <= bit_idx - 1;
-                            settle_cnt <= SETTLE_CYCLES;
-                            state <= CONVERT;
+                    // comparator sampled, update the bit and prepare next trial
+                    if (bit_idx == 0) begin
+                        // final bit: set or clear LSB according to comparator
+                        if (cmp) begin
+                            cdac_bits_bin <= cdac_bits_bin | (1 << bit_idx);
                         end else begin
-                            // set/clear current bit, and set next trial bit (bit_idx-1)
-                            if (cdac_bits_bin[N-1] ^ cmp) begin
-                                cdac_bits_bin <= (cdac_bits_bin | (1 << bit_idx)) | (1 << (bit_idx - 1));
-                            end else begin
-                                cdac_bits_bin <= (cdac_bits_bin & ~(1 << bit_idx)) | (1 << (bit_idx - 1));
-                            end
-                            bit_idx <= bit_idx - 1;
-                            settle_cnt <= SETTLE_CYCLES;
-                            state <= CONVERT;
+                            cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx);
                         end
+                        done <= 1'b1;
+						result <= cdac_bits_bin;
+                        if (start) begin
+                            state <= SAMPLE;
+                            bit_idx <= N>0 ? N-1 : 0;
+                        sample <= 1'b1;
+                            busy <= 1'b1;
+                        end else begin
+                            state <= DONE;
+                        end
+                    end else if (bit_idx == N-1) begin
+                        // first bit: set or clear MSB according to comparator, first bit indicates the sign and set next trial bit (bit_idx-1)
+                        if (cmp) begin
+                            cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx) | (1 << (bit_idx - 1));
+                        end else begin
+                            cdac_bits_bin <= cdac_bits_bin | (1 << bit_idx) | (1 << (bit_idx - 1));
+                        end
+                        bit_idx <= bit_idx - 1;
+                        state <= CONVERT;
+                    end else begin
+                        // set/clear current bit, and set next trial bit (bit_idx-1)
+                        if (cmp) begin
+                            cdac_bits_bin <= (cdac_bits_bin | (1 << bit_idx)) | (1 << (bit_idx - 1));
+                        end else begin
+                            cdac_bits_bin <= (cdac_bits_bin & ~(1 << bit_idx)) | (1 << (bit_idx - 1));
+                        end
+                        bit_idx <= bit_idx - 1;
+                        state <= CONVERT;
                     end
                 end
 
@@ -118,9 +110,10 @@ module SAR_logic #(
                         done <= 1'b0;
                     end else begin
 					state <= SAMPLE;
+                    sample <= 1'b1;
 					done <= 1'b0;
 					cdac_bits_bin <= {N{1'b0}};
-                        bit_idx <= N>0 ? N-1 : 0;
+                    bit_idx <= N>0 ? N-1 : 0;
 					busy <= 1'b1;
 					end
                 end
@@ -131,22 +124,22 @@ module SAR_logic #(
     always @(*) begin
     cdac_bits = {2**(N-1){1'b1}};
     neg_cdac_bits = {2**(N-1){1'b1}};
-    code_val = 0;
+    code_val = cdac_bits_bin[N-1]
+        ? -$signed({cdac_bits_bin[N-1], cdac_bits_bin})
+        : $signed(cdac_bits_bin);
+	
+	if (cdac_bits_bin[N-1]) begin
+		code_val = code_val + 1;
+	end
 
-    for (i = 0; i < N-1; i = i + 1) begin
-        if (~cdac_bits_bin[i] & cdac_bits_bin[N-1]) begin
-            code_val = code_val + (1 << i);
-        end else if (cdac_bits_bin[i]) begin
-			code_val = code_val + (1<<i);
-		end
-    end
-
-    for (i = 0; i < 2**(N-1); i = i + 1) begin
-        if (i < code_val) begin
-            if (cdac_bits_bin[N-1]) begin
-                cdac_bits[i] = 1'b0;
-            end else begin
-                neg_cdac_bits[i] = 1'b0;
+    if (state != SAMPLE) begin
+        for (i = 0; i < 2**(N-1); i = i + 1) begin
+            if (i < code_val) begin
+                if (cdac_bits_bin[N-1]) begin
+                    cdac_bits[i] = 1'b0;
+                end else begin
+                    neg_cdac_bits[i] = 1'b0;
+                end
             end
         end
     end
