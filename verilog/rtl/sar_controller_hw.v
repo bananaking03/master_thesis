@@ -7,11 +7,10 @@ module SAR_logic #(
     input  wire             rst_n,
     input  wire             start,
     input  wire             cmp,          // comparator result: 1 if Vin >= Vdac
-    output reg  [2**(N-1)-1:0]     cdac_bits,    // drive switches: 1 -> connect corresponding cap to Vref (trial)
-	output reg  [2**(N-1)-1:0]  neg_cdac_bits,
     output reg              sample,       // sampling phase (asserted during sample)
     output reg              busy,
-    output reg              done
+    output reg              done,
+    output reg signed [N-1:0] cdac_bits_bin
 );
 
     // FSM states
@@ -22,10 +21,7 @@ module SAR_logic #(
 
     reg [1:0] state, next_state;
     reg [$clog2(N)-1:0] bit_idx;
-    reg signed [N-1:0] cdac_bits_bin;
 	reg signed [N-1:0] result;
-
-    integer i, code_val;
 
     // Single-block FSM and conversion control (synchronous)
     always @(negedge clk or negedge rst_n) begin
@@ -120,31 +116,5 @@ module SAR_logic #(
             endcase
         end
     end
-
-    always @(*) begin
-    cdac_bits = {2**(N-1){1'b1}};
-    neg_cdac_bits = {2**(N-1){1'b1}};
-    code_val = cdac_bits_bin[N-1]
-        ? -$signed({cdac_bits_bin[N-1], cdac_bits_bin})
-        : $signed(cdac_bits_bin);
-	
-	if (cdac_bits_bin[N-1]) begin
-		code_val = code_val + 1;
-	end
-
-    if (state != SAMPLE) begin
-        for (i = 0; i < 2**(N-1); i = i + 1) begin
-            if (i < code_val) begin
-                if (cdac_bits_bin[N-1]) begin
-                    cdac_bits[i] = 1'b0;
-                end else begin
-                    neg_cdac_bits[i] = 1'b0;
-                end
-            end
-        end
-    end
-end
-
-	//assign neg_cdac_bits = ~cdac_bits;
 
 endmodule

@@ -12,9 +12,11 @@ module calibration_module #(
     parameter integer SOLVER_FRAC_BITS = 16 // fractional bits used by the matrix solver
 )(
     input wire clk,
+    input wire sar_done,
+    input wire sample,
     input wire rst_n,
-    input wire [ALGO_DATA_WIDTH-1:0] data_in,
-    input wire [DAC_CTRL_WIDTH-1:0] DAC_ctrl_in,
+    input wire signed [ALGO_DATA_WIDTH-1:0] data_in,
+    input wire signed [DAC_CTRL_WIDTH-1:0] DAC_ctrl_in,
     output wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out,
     output wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out_neg,
     output wire dither_out
@@ -29,14 +31,14 @@ module calibration_module #(
 
     // Generate dither signal
     dither_gen dither_gen (
-        .clk(clk),
+        .clk(sar_done),
         .rst_n(rst_n),
         .dither_out(dither_out)
     );
     
     // Register previous-cycle dither value for use by other blocks
     reg prev_dither_out;
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge sar_done or negedge rst_n) begin
         if (!rst_n)
             prev_dither_out <= 1'b0;
         else
@@ -59,7 +61,7 @@ module calibration_module #(
         .ALGO_DATA_WIDTH(ALGO_DATA_WIDTH),
         .HISTOGRAM_DATA_WIDTH(HISTOGRAM_DATA_WIDTH)
     ) hist_plus_inst (
-        .clk(clk),
+        .clk(sar_done),
         .rst_n(rst_n),
         .acc_en(prev_dither_out),
         .reset_bins(thresholds_update_now),
@@ -71,7 +73,7 @@ module calibration_module #(
         .ALGO_DATA_WIDTH(ALGO_DATA_WIDTH),
         .HISTOGRAM_DATA_WIDTH(HISTOGRAM_DATA_WIDTH)
     ) hist_minus_inst (
-        .clk(clk),
+        .clk(sar_done),
         .rst_n(rst_n),
         .acc_en(~prev_dither_out),
         .reset_bins(thresholds_update_now),
@@ -165,12 +167,19 @@ module calibration_module #(
     end
 
     // Select thresholds to generate DAC control output
-    // DAC_ctrl_in is partitioned in groups of 4 steps:
+    // DAC_ctrl_in is signed; negative codes use the negative rail and retain
+    // the controller's one-step offset when converting to a magnitude.
+    // The magnitude is partitioned in groups of 4 steps:
     // 0 -> 0
     // 1 -> delta[0]/4, 2 -> delta[0]*2/4, 3 -> delta[0]*3/4, 4 -> delta[0]
     // 5 -> delta[0] + delta[1]/4, 6 -> delta[0] + delta[1]*2/4, etc.
-    wire [DAC_CTRL_WIDTH-1:0] DAC_ctrl_index_lower = DAC_ctrl_in >> 2;  // floor(DAC_ctrl_in / 4)
-    wire [1:0] DAC_ctrl_fraction = DAC_ctrl_in & 3;  // DAC_ctrl_in % 4
+    wire signed [DAC_CTRL_WIDTH:0] DAC_ctrl_extended = {DAC_ctrl_in[DAC_CTRL_WIDTH-1], DAC_ctrl_in};
+    wire [DAC_CTRL_WIDTH:0] DAC_ctrl_magnitude = DAC_ctrl_in[DAC_CTRL_WIDTH-1]
+        ? -DAC_ctrl_extended
+        : DAC_ctrl_extended;
+    wire [DAC_CTRL_WIDTH:0] DAC_ctrl_selection_code = DAC_ctrl_magnitude + DAC_ctrl_in[DAC_CTRL_WIDTH-1];
+    wire [DAC_CTRL_WIDTH-1:0] DAC_ctrl_index_lower = DAC_ctrl_selection_code >> 2;
+    wire [1:0] DAC_ctrl_fraction = DAC_ctrl_selection_code[1:0];
     reg [HISTOGRAM_DATA_WIDTH + DAC_CTRL_WIDTH - 1:0] DAC_ctrl_bin;
 
     always @(*) begin
@@ -199,14 +208,13 @@ module calibration_module #(
         end
     end
 
-    // Store the final DAC control output in thermometer code format
-
-    // Combinational logic to assign output data
-    // Convert DAC_ctrl_bin to thermometer code: bit i = 1 if i < DAC_ctrl_bin, else 0
+    // Convert the calibrated threshold count to active-low thermometer code.
+    // Negative codes use the negative rail; positive codes use the primary rail.
     genvar therm_idx;
     generate
         for (therm_idx = 0; therm_idx < (2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)); therm_idx = therm_idx + 1) begin : gen_thermometer
-            assign DAC_ctrl_out[therm_idx] = (therm_idx < DAC_ctrl_bin);
+            assign DAC_ctrl_out[therm_idx] = sample || DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
+            assign DAC_ctrl_out_neg[therm_idx] = sample || !DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
         end
     endgenerate
 

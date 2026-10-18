@@ -2,81 +2,80 @@
 
 module tb_calibration_module;
 
-    parameter ALGO_DATA_WIDTH = 8;
-    parameter DAC_CTRL_WIDTH = 10;
-    parameter CLK_PERIOD = 10; // ns
-    parameter DAC_EXTRA_DATA_WIDTH = 7; // Added parameter for extra DAC control bits
+    localparam ALGO_DATA_WIDTH = 4;
+    localparam DAC_CTRL_WIDTH = 4;
+    localparam DAC_EXTRA_DATA_WIDTH = 2;
+    localparam OUTPUT_WIDTH = 2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH);
 
-    reg clk;
-    reg rst_n;
-    reg [ALGO_DATA_WIDTH-1:0] data_in;
-    reg [DAC_CTRL_WIDTH-1:0] DAC_ctrl_in;
-    wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out;
+    reg clk = 1'b0;
+    reg rst_n = 1'b0;
+    reg sar_done = 1'b0;
+    reg sample = 1'b0;
+    reg signed [ALGO_DATA_WIDTH-1:0] data_in = 0;
+    reg signed [DAC_CTRL_WIDTH-1:0] DAC_ctrl_in = 0;
+    wire [OUTPUT_WIDTH-1:0] DAC_ctrl_out;
+    wire [OUTPUT_WIDTH-1:0] DAC_ctrl_out_neg;
     wire dither_out;
 
-    // Instantiate DUT with default parameters
     calibration_module #(
-        .DAC_EXTRA_DATA_WIDTH(7),
+        .DAC_EXTRA_DATA_WIDTH(DAC_EXTRA_DATA_WIDTH),
         .ALGO_DATA_WIDTH(ALGO_DATA_WIDTH),
         .DAC_CTRL_WIDTH(DAC_CTRL_WIDTH),
-        .HISTOGRAM_DATA_WIDTH(8),
-        .CALIBRATION_LENGTH(1800),
-        .CAL_CONSTANT(0.1)
+        .HISTOGRAM_DATA_WIDTH(4)
     ) uut (
         .clk(clk),
         .rst_n(rst_n),
+        .sar_done(sar_done),
+        .sample(sample),
         .data_in(data_in),
         .DAC_ctrl_in(DAC_ctrl_in),
         .DAC_ctrl_out(DAC_ctrl_out),
+        .DAC_ctrl_out_neg(DAC_ctrl_out_neg),
         .dither_out(dither_out)
     );
 
-    // Clock generation
-    initial begin
-        clk = 0;
-        forever #(CLK_PERIOD/2) clk = ~clk;
-    end
+    always #5 clk = ~clk;
 
-    // Test scenario
-    localparam INPUT_LEN = 10000;
-    integer sample_idx;
-    integer ones_count;
-    integer bit_idx;
-    real sine_val;
-
-    initial begin
-        // Waveform dump
-        // $dumpfile("calibration_module_tb.vcd");
-        // $dumpvars(0, tb_calibration_module);
-
-        // init
-        rst_n = 0;
-        data_in = 0;
-        DAC_ctrl_in = 0;
-        sample_idx = 0;
-
-        // release reset after a few cycles
-        #(CLK_PERIOD*5);
-        rst_n = 1;
-
-        // Apply sine-wave stimulus to data_in and cycle DAC_ctrl_in through 1..9
-        while (sample_idx < INPUT_LEN) begin
-            @(posedge clk);
-            sine_val = 128.0 + 127.0 * $sin(2.0 * 3.141592653589793 * sample_idx / 100.0);
-            data_in = $rtoi(sine_val);
-            DAC_ctrl_in = (sample_idx % 9) + 1;
-
-            ones_count = 0;
-            for (bit_idx = 0; bit_idx < (2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)); bit_idx = bit_idx + 1) begin
-                ones_count = ones_count + DAC_ctrl_out[bit_idx];
-            end
-            $display("%0t: sample=%0d DAC_ctrl_in=%0d DAC_ctrl_out_ones=%0d", $time, sample_idx, DAC_ctrl_in, ones_count);
-
-            sample_idx = sample_idx + 1;
+    function integer count_zero_bits;
+        input [OUTPUT_WIDTH-1:0] value;
+        integer bit_index;
+        begin
+            count_zero_bits = 0;
+            for (bit_index = 0; bit_index < OUTPUT_WIDTH; bit_index = bit_index + 1)
+                if (!value[bit_index])
+                    count_zero_bits = count_zero_bits + 1;
         end
+    endfunction
 
-        // Allow a few extra cycles for the DUT to settle
-        repeat (10) @(posedge clk);
+    initial begin
+        #12 rst_n = 1'b1;
+        #1;
+        if (count_zero_bits(DAC_ctrl_out) != 0 || count_zero_bits(DAC_ctrl_out_neg) != 0)
+            $fatal(1, "zero input must leave both rails inactive");
+
+        sample = 1'b1;
+        DAC_ctrl_in = -4'sd1;
+        #1;
+        if (count_zero_bits(DAC_ctrl_out) != 0 || count_zero_bits(DAC_ctrl_out_neg) != 0)
+            $fatal(1, "sample phase must leave both rails inactive");
+
+        sample = 1'b0;
+        DAC_ctrl_in = 4'sd4;
+        #1;
+        if (count_zero_bits(DAC_ctrl_out) != 3 || count_zero_bits(DAC_ctrl_out_neg) != 0)
+            $fatal(1, "positive code must select the primary output rail");
+
+        DAC_ctrl_in = -4'sd1;
+        #1;
+        if (count_zero_bits(DAC_ctrl_out) != 0 || count_zero_bits(DAC_ctrl_out_neg) != 1)
+            $fatal(1, "negative code must select the negative output rail with its offset");
+
+        DAC_ctrl_in = -4'sd8;
+        #1;
+        if (count_zero_bits(DAC_ctrl_out) != 0 || count_zero_bits(DAC_ctrl_out_neg) != 6)
+            $fatal(1, "minimum signed code magnitude was not mapped correctly");
+
+        $display("Signed calibration rail checks passed");
         $finish;
     end
 
