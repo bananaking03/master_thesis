@@ -1,0 +1,56 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module DAC_un_13b(Sgnd, Vref, gnd, vout);
+    parameter real vlogic_threshold = 0.9;
+    parameter real Rdrive = 1k;
+
+    inout [8191:0] Sgnd;
+    inout Vref;
+    inout gnd;
+    inout vout;
+
+    electrical [8191:0] Sgnd;
+    electrical Vref;
+    electrical gnd;
+    electrical vout;
+
+    real dac_code;
+    real vout_target;
+    real unit_on [0:8191];
+    real Vsample;
+
+    integer i;
+    genvar unit;
+
+    generate
+        for (unit = 0; unit < 8192; unit = unit + 1) begin : gen_unit
+            analog begin
+                unit_on[unit] =
+                    (V(Sgnd[unit], gnd) < vlogic_threshold) ? 1.0 : 0.0;
+            end
+        end
+    endgenerate
+
+    analog begin
+        @(initial_step)
+            Vsample = V(vout, gnd);
+
+        dac_code = 0.0;
+
+        for (i = 0; i < 8192; i = i + 1) begin
+            dac_code = dac_code + unit_on[i];
+        end
+
+        vout_target =
+            Vsample + dac_code * V(Vref, gnd) / 8192.0;
+
+        if (dac_code == 0.0) begin
+            Vsample = V(vout, gnd);
+            I(vout, gnd) <+ 0.0;
+        end else begin
+            I(vout, gnd) <+
+                (V(vout, gnd) - vout_target) / Rdrive;
+        end
+    end
+endmodule

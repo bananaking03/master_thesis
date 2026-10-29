@@ -1,0 +1,49 @@
+clear;
+clc;
+close all;
+
+% Read exported SimVision data H_matched
+data = readtable('histogram_matched_outputs_callen2000_schemcomp.csv', ...
+    'VariableNamingRule', 'preserve');
+
+% Display column names
+% disp(data.Properties.VariableNames);
+
+%% Convert into decimal
+
+H_matched = zeros(height(data), 1, 'int64');
+
+for i = 2:width(data)
+
+    % Extract hexadecimal string
+    hex_str = string(data{2,i});
+    hex_str = regexprep(hex_str, '[^0-9A-Fa-f]', '');
+
+    % Pad to 16 hexadecimal digits
+    hex_str = pad(hex_str, 16, 'left', '0');
+
+    % Split into two 32-bit parts
+    high = uint64(hex2dec(extractBetween(hex_str, 1, 8)));
+    low  = uint64(hex2dec(extractBetween(hex_str, 9, 16)));
+
+    % Combine into 64-bit integer
+    value = bitor(bitshift(high, 32), low);
+
+    % Interpret as signed 64-bit two's complement
+    H_matched(i-1) = typecast(value, 'int64');
+
+end
+
+%% Read exported SimVision data H_plus
+data = readtable('histogram_plus_outputs_callen2000_schemcomp.csv', ...
+    'VariableNamingRule', 'preserve');
+
+H_plus = data(2,2:257)
+
+
+% % Plot
+% figure;
+% stairs(time, signal);
+% xlabel('Time');
+% ylabel('Digital value');
+% grid on;

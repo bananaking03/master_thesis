@@ -26,8 +26,19 @@ module calibration_module #(
     localparam EXTRA_WIDTH_FROM_ALGO_TO_DAC = DAC_EXTRA_DATA_WIDTH + DAC_CTRL_WIDTH - ALGO_DATA_WIDTH;
     localparam NUM_HIST = 1 << ALGO_DATA_WIDTH; // number of histogram bins / thresholds
     localparam NUM_THRESHOLDS = NUM_HIST;
+    localparam HISTOGRAM_ROTATION = (NUM_HIST / 2 + 1) % NUM_HIST;
     wire [HISTOGRAM_DATA_WIDTH-1:0] hist_plus_data [0:NUM_HIST-1];
     wire [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_data [0:NUM_HIST-1];
+    wire [HISTOGRAM_DATA_WIDTH-1:0] hist_plus_raw [0:NUM_HIST-1];
+    wire [HISTOGRAM_DATA_WIDTH-1:0] hist_minus_raw [0:NUM_HIST-1];
+
+    genvar hist_map_idx;
+    generate
+        for (hist_map_idx = 0; hist_map_idx < NUM_HIST; hist_map_idx = hist_map_idx + 1) begin : gen_histogram_reorder
+            assign hist_plus_data[hist_map_idx] = hist_plus_raw[(hist_map_idx + HISTOGRAM_ROTATION) % NUM_HIST];
+            assign hist_minus_data[hist_map_idx] = hist_minus_raw[(hist_map_idx + HISTOGRAM_ROTATION) % NUM_HIST];
+        end
+    endgenerate
 
     // Generate dither signal
     dither_gen dither_gen (
@@ -63,10 +74,10 @@ module calibration_module #(
     ) hist_plus_inst (
         .clk(sar_done),
         .rst_n(rst_n),
-        .acc_en(prev_dither_out),
+        .acc_en(dither_out),
         .reset_bins(thresholds_update_now),
         .data_in(data_in_minus1),
-        .data_out(hist_plus_data)
+        .data_out(hist_plus_raw)
     );
 
     histogram #(
@@ -75,10 +86,10 @@ module calibration_module #(
     ) hist_minus_inst (
         .clk(sar_done),
         .rst_n(rst_n),
-        .acc_en(~prev_dither_out),
+        .acc_en(~dither_out),
         .reset_bins(thresholds_update_now),
         .data_in(data_in),
-        .data_out(hist_minus_data)
+        .data_out(hist_minus_raw)
     );
 
 
@@ -88,8 +99,8 @@ module calibration_module #(
     genvar i;
     generate
         for (i = 0; i < NUM_HIST; i = i + 1) begin : gen_hist_diff
-            // compute signed difference and apply integer fixed-point scaling (NUM/DEN)
-            assign histogram_diff[i] = ($signed($signed(hist_plus_data[i]) - $signed(hist_minus_data[i])) * CAL_CONSTANT_NUM) / CAL_CONSTANT_DEN;
+            // Keep the raw difference for matching; scale the matched result afterward.
+            assign histogram_diff[i] = $signed(hist_plus_data[i]) - $signed(hist_minus_data[i]);
         end
     endgenerate
 
@@ -104,9 +115,21 @@ module calibration_module #(
     reg signed [63:0] solver_cprime [0:NUM_HIST-1];
     reg signed [63:0] solver_dprime [0:NUM_HIST-1];
     reg signed [63:0] matched_histogram [0:NUM_HIST-1];
+    wire signed [63:0] scaled_matched_histogram [0:NUM_HIST-1];
+    wire signed [63:0] matched_histogram_update [0:NUM_HIST-1];
     integer solver_index;
     reg signed [63:0] solver_denom;
     reg signed [63:0] solver_rhs;
+
+    genvar scale_idx;
+    generate
+        for (scale_idx = 0; scale_idx < NUM_HIST; scale_idx = scale_idx + 1) begin : gen_scaled_matched_histogram
+            assign scaled_matched_histogram[scale_idx] =
+                (((matched_histogram[scale_idx] * CAL_CONSTANT_NUM) / CAL_CONSTANT_DEN)/CALIBRATION_LENGTH) <<< (ALGO_DATA_WIDTH - 1);
+            assign matched_histogram_update[scale_idx] =
+                scaled_matched_histogram[scale_idx] >>> SOLVER_FRAC_BITS;
+        end
+    endgenerate
 
     always @(*) begin
         // Forward elimination for the tridiagonal error matrix.
@@ -141,7 +164,7 @@ module calibration_module #(
             // Reset delta thresholds to initial values and clear counter
             integer j;
             for (j = 0; j < NUM_THRESHOLDS; j = j + 1) begin
-                delta_thresholds_reg[j] <= 2**EXTRA_WIDTH_FROM_ALGO_TO_DAC - 1;
+                delta_thresholds_reg[j] <= 2**EXTRA_WIDTH_FROM_ALGO_TO_DAC;
             end
             calib_cnt <= 32'd0;
         end else begin
@@ -152,14 +175,14 @@ module calibration_module #(
                 for (k = 0; k < NUM_HIST; k = k + 1) begin
                     // Convert the fixed-point solver result back to an integer.
                     signed_result = $signed({1'b0, delta_thresholds_reg[k]}) +
-                                    (matched_histogram[k] >>> SOLVER_FRAC_BITS);
+                                    matched_histogram_update[k];
                     if (signed_result < 0) // prevent overflow and underflow of thresholds
                         delta_thresholds_reg[k] <= {EXTRA_WIDTH_FROM_ALGO_TO_DAC+2{1'b0}};
                     else
                         delta_thresholds_reg[k] <= signed_result;
                 end
                 calib_cnt <= 32'd0;
-            end else begin
+            end else if (sar_done) begin
                 // increment calibration cycle counter
                 calib_cnt <= calib_cnt + 1;
             end
@@ -213,8 +236,8 @@ module calibration_module #(
     genvar therm_idx;
     generate
         for (therm_idx = 0; therm_idx < (2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)); therm_idx = therm_idx + 1) begin : gen_thermometer
-            assign DAC_ctrl_out[therm_idx] = sample || DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
-            assign DAC_ctrl_out_neg[therm_idx] = sample || !DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
+            assign DAC_ctrl_out[therm_idx] = sample || !DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
+            assign DAC_ctrl_out_neg[therm_idx] = sample || DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
         end
     endgenerate
 

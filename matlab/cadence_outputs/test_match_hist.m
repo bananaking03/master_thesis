@@ -1,0 +1,31 @@
+H_diff = zeros(256,1);
+L_algo = 256;
+lambda_reg = 0.1;
+
+H_diff(4) = -1;
+H_diff(13) = -1;
+H_diff(23) = 1;
+H_diff(39) = 1;
+H_diff(54) = -1;
+H_diff(76) = -1;
+H_diff(95) = 1;
+H_diff(120) = -1;
+H_diff(132) = -1;
+H_diff(139) = 1;
+H_diff(164) = -1;
+H_diff(176) = 1;
+H_diff(204) = 1;
+H_diff(208) = 1;
+H_diff(214) = 1;
+H_diff(235) = -1;
+H_diff(241) = 1;
+H_diff(253) = -1;
+H_diff(254) = -1;
+H_diff(255) = 1;
+H_diff(256) = 1;
+
+error_matrix = 0.5 * eye(L_algo) + ...
+    -0.25 * diag(ones(L_algo-1,1), 1) + ...
+    -0.25 * diag(ones(L_algo-1,1), -1);
+
+H_delta_matched_full = (error_matrix + lambda_reg*eye(L_algo))\H_diff;

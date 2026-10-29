@@ -18,7 +18,7 @@ module digi_top #(
     wire busy;
     wire sar_done;
     wire signed [N-1:0] cdac_bits_bin;
-    wire signed [ALGO_DATA_WIDTH-1:0] calibration_data = cdac_bits_bin;
+    wire signed [ALGO_DATA_WIDTH-1:0] calibration_data = cdac_bits_bin[N-1:N-ALGO_DATA_WIDTH]; // Use the most significant bits of cdac_bits_bin for calibration
     wire signed [DAC_CTRL_WIDTH-1:0] calibration_code = cdac_bits_bin;
 
     SAR_logic #(

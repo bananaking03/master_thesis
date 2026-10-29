@@ -88,5 +88,11 @@ plot(Vfit*1e3, Pfit, 'LineWidth', 1.5);
 
 xlabel('Differential input voltage [mV]');
 ylabel('Probability of output = 1');
-legend('Simulation data', 'Gaussian CDF fit', 'Location', 'best');
+lgd = legend('Simulation data', 'Gaussian CDF fit', 'Location', 'best');
+lgd.Color = 'white';
+lgd.TextColor = 'black';
+set(gcf, 'Color', 'white')
+set(gca, 'Color', 'white')
+set(gca, 'XColor', 'black','YColor','black')
+set(gca, 'GridColor', 'black')
 grid on;

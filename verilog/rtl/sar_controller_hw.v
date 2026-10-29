@@ -54,6 +54,7 @@ module SAR_logic #(
                     //cdac_bits_bin <= {N{1'b0}} | (1 << bit_idx);
                     cdac_bits_bin <= {N{1'b0}};
 					done <= 1'b0;
+                    result <= cdac_bits_bin;
                     state <= CONVERT;
                 end
 
@@ -67,7 +68,6 @@ module SAR_logic #(
                             cdac_bits_bin <= cdac_bits_bin & ~(1 << bit_idx);
                         end
                         done <= 1'b1;
-						result <= cdac_bits_bin;
                         if (start) begin
                             state <= SAMPLE;
                             bit_idx <= N>0 ? N-1 : 0;
