@@ -112,50 +112,150 @@ module calibration_module #(
     localparam integer MATRIX_OFF_DIAG = -LAMBDA_REG_DEN;
 
     // Fixed-point arrays used by the Thomas algorithm for A*x = H_delta.
+    // All solver values use Q(SOLVER_FRAC_BITS) representation.
+
+    localparam integer MATRIX_SCALE = 4 * LAMBDA_REG_DEN;
+
     reg signed [63:0] solver_cprime [0:NUM_HIST-1];
     reg signed [63:0] solver_dprime [0:NUM_HIST-1];
     reg signed [63:0] matched_histogram [0:NUM_HIST-1];
+
     wire signed [63:0] scaled_matched_histogram [0:NUM_HIST-1];
     wire signed [63:0] matched_histogram_update [0:NUM_HIST-1];
+
     integer solver_index;
+
     reg signed [63:0] solver_denom;
     reg signed [63:0] solver_rhs;
 
+    // Scale the matched histogram for the threshold update.
+    // matched_histogram is stored in Q(SOLVER_FRAC_BITS) format.
+
     genvar scale_idx;
     generate
-        for (scale_idx = 0; scale_idx < NUM_HIST; scale_idx = scale_idx + 1) begin : gen_scaled_matched_histogram
+        for (scale_idx = 0; scale_idx < NUM_HIST;
+            scale_idx = scale_idx + 1) begin : gen_scaled_matched_histogram
+
             assign scaled_matched_histogram[scale_idx] =
-                (((matched_histogram[scale_idx] * CAL_CONSTANT_NUM) / CAL_CONSTANT_DEN)/CALIBRATION_LENGTH) <<< (ALGO_DATA_WIDTH - 1);
+                (matched_histogram[scale_idx] *
+                CAL_CONSTANT_NUM *
+                (64'sd1 <<< (ALGO_DATA_WIDTH - 1))) /
+                (CAL_CONSTANT_DEN * CALIBRATION_LENGTH);
+
             assign matched_histogram_update[scale_idx] =
                 scaled_matched_histogram[scale_idx] >>> SOLVER_FRAC_BITS;
+
         end
     endgenerate
 
+
+    // ============================================================
+    // Thomas algorithm
+    // Solves:
+    // (error_matrix + lambda_reg*I) * x = histogram_diff
+    //
+    // Matrix coefficients are multiplied by MATRIX_SCALE.
+    // Therefore, the right-hand side must also be multiplied
+    // by MATRIX_SCALE.
+    //
+    // All intermediate solver values use fixed-point Q16.
+    // ============================================================
+
     always @(*) begin
-        // Forward elimination for the tridiagonal error matrix.
-        solver_cprime[0] = (MATRIX_OFF_DIAG <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
-        solver_rhs = $signed(histogram_diff[0]) * (4 * LAMBDA_REG_DEN);
 
+        // --------------------------------------------------------
+        // First element
+        // --------------------------------------------------------
+
+        // Denominator in Q16
+        solver_denom =
+            $signed(MATRIX_DIAG) <<< SOLVER_FRAC_BITS;
+
+        // Scale RHS to match integer matrix coefficients
+        solver_rhs =
+            $signed(histogram_diff[0]) * MATRIX_SCALE;
+
+        // cprime[0] = off_diag / diag
+        // Output is Q16
+        solver_cprime[0] =
+            ($signed(MATRIX_OFF_DIAG) <<<
+            (2 * SOLVER_FRAC_BITS)) / solver_denom;
+
+        // dprime[0] = rhs / diag
+        // Output is Q16
         solver_dprime[0] =
-            (solver_rhs <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
+            (solver_rhs <<< (2 * SOLVER_FRAC_BITS)) /
+            solver_denom;
 
-        for (solver_index = 1; solver_index < NUM_HIST; solver_index = solver_index + 1) begin
-            solver_denom = MATRIX_DIAG -
-                           (MATRIX_OFF_DIAG * solver_cprime[solver_index - 1] >>> SOLVER_FRAC_BITS);
+
+        // --------------------------------------------------------
+        // Forward elimination
+        // --------------------------------------------------------
+
+        for (solver_index = 1;
+            solver_index < NUM_HIST;
+            solver_index = solver_index + 1) begin
+
+            // denom = diag - off_diag*cprime[i-1]
+            // All terms are represented in Q16
+
+            solver_denom =
+                ($signed(MATRIX_DIAG) <<< SOLVER_FRAC_BITS) -
+                ($signed(MATRIX_OFF_DIAG) *
+                solver_cprime[solver_index - 1]);
+
+            // cprime[i] = off_diag / denom
+            // Output remains Q16
+
             solver_cprime[solver_index] =
-                (MATRIX_OFF_DIAG <<< SOLVER_FRAC_BITS) / solver_denom;
-            solver_rhs = ($signed(histogram_diff[solver_index]) <<< SOLVER_FRAC_BITS) -
-                         (MATRIX_OFF_DIAG * solver_dprime[solver_index - 1] >>> SOLVER_FRAC_BITS);
+                ($signed(MATRIX_OFF_DIAG) <<<
+                (2 * SOLVER_FRAC_BITS)) / solver_denom;
+
+            // Scale histogram difference to match matrix
+
+            solver_rhs =
+                $signed(histogram_diff[solver_index]) *
+                MATRIX_SCALE;
+
+            // dprime[i] =
+            // (rhs - off_diag*dprime[i-1]) / denom
+            //
+            // Numerator and denominator are both Q16.
+            // Shift numerator by 16 to obtain Q16 output.
+
             solver_dprime[solver_index] =
-                (solver_rhs <<< SOLVER_FRAC_BITS) / solver_denom;
+                (((solver_rhs <<< SOLVER_FRAC_BITS) -
+                ($signed(MATRIX_OFF_DIAG) *
+                solver_dprime[solver_index - 1]))
+                <<< SOLVER_FRAC_BITS) / solver_denom;
+
         end
 
-        // Back substitution produces the regularized histogram difference.
-        matched_histogram[NUM_HIST - 1] = solver_dprime[NUM_HIST - 1];
-        for (solver_index = NUM_HIST - 2; solver_index >= 0; solver_index = solver_index - 1) begin
-            matched_histogram[solver_index] = solver_dprime[solver_index] -
-                (solver_cprime[solver_index] * matched_histogram[solver_index + 1] >>> SOLVER_FRAC_BITS);
+
+        // --------------------------------------------------------
+        // Back substitution
+        // --------------------------------------------------------
+
+        matched_histogram[NUM_HIST - 1] =
+            solver_dprime[NUM_HIST - 1];
+
+        for (solver_index = NUM_HIST - 2;
+            solver_index >= 0;
+            solver_index = solver_index - 1) begin
+
+            // x[i] = dprime[i] - cprime[i]*x[i+1]
+            //
+            // Q16 * Q16 = Q32
+            // Shift right by 16 to return to Q16.
+
+            matched_histogram[solver_index] =
+                solver_dprime[solver_index] -
+                ((solver_cprime[solver_index] *
+                matched_histogram[solver_index + 1])
+                >>> SOLVER_FRAC_BITS);
+
         end
+
     end
 
     // Registers to store the thresholds
