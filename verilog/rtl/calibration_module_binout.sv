@@ -100,7 +100,7 @@ module calibration_module #(
     generate
         for (i = 0; i < NUM_HIST; i = i + 1) begin : gen_hist_diff
             // Keep the raw difference for matching; scale the matched result afterward.
-            assign histogram_diff[i] = $signed(hist_plus_data[i]) - $signed(hist_minus_data[i]);
+            assign histogram_diff[i] = hist_plus_data[i] - hist_minus_data[i];
         end
     endgenerate
 
@@ -134,8 +134,10 @@ module calibration_module #(
     always @(*) begin
         // Forward elimination for the tridiagonal error matrix.
         solver_cprime[0] = (MATRIX_OFF_DIAG <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
-        solver_rhs = $signed(histogram_diff[0]) <<< SOLVER_FRAC_BITS;
-        solver_dprime[0] = (solver_rhs <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
+        solver_rhs = $signed(histogram_diff[0]) * (4 * LAMBDA_REG_DEN);
+
+        solver_dprime[0] =
+            (solver_rhs <<< SOLVER_FRAC_BITS) / MATRIX_DIAG;
 
         for (solver_index = 1; solver_index < NUM_HIST; solver_index = solver_index + 1) begin
             solver_denom = MATRIX_DIAG -
@@ -233,30 +235,30 @@ module calibration_module #(
 
     // Convert the calibrated threshold count to active-low thermometer code.
     // Negative codes use the negative rail; positive codes use the primary rail.
-    wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out,
-    wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1:0] DAC_ctrl_out_neg,
+    wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-2:0] DAC_ctrl_out;
+    wire [2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-2:0] DAC_ctrl_out_neg;
     genvar therm_idx;
     generate
-        for (therm_idx = 0; therm_idx < (2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)); therm_idx = therm_idx + 1) begin : gen_thermometer
+        for (therm_idx = 0; therm_idx < (2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1); therm_idx = therm_idx + 1) begin : gen_thermometer
             assign DAC_ctrl_out[therm_idx] = sample || !DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
             assign DAC_ctrl_out_neg[therm_idx] = sample || DAC_ctrl_in[DAC_CTRL_WIDTH-1] || (therm_idx >= DAC_ctrl_bin);
         end
     endgenerate
 
     unary_popcount #(
-        .N(2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)),
+        .N(2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1),
         .CODE_WIDTH(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)
     ) unary_popcount_inst (
-        .in(DAC_ctrl_out),
-        .out(DAC_ctrl_out_bin)
+        .unary_ctrl(DAC_ctrl_out),
+        .dac_code(DAC_ctrl_out_bin)
     );
 
     unary_popcount #(
-        .N(2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)),
+        .N(2**(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)-1),
         .CODE_WIDTH(DAC_CTRL_WIDTH+DAC_EXTRA_DATA_WIDTH)
     ) unary_popcount_neg_inst (
-        .in(DAC_ctrl_out_neg),
-        .out(DAC_ctrl_out_neg_bin)
+        .unary_ctrl(DAC_ctrl_out_neg),
+        .dac_code(DAC_ctrl_out_neg_bin)
     );
 
 endmodule
