@@ -120,7 +120,7 @@ module calibration_module #(
     reg signed [63:0] solver_dprime [0:NUM_HIST-1];
     reg signed [63:0] matched_histogram [0:NUM_HIST-1];
 
-    wire signed [63:0] scaled_matched_histogram [0:NUM_HIST-1];
+    wire signed [63:0] matched_histogram_integer [0:NUM_HIST-1];
     wire signed [63:0] matched_histogram_update [0:NUM_HIST-1];
 
     integer solver_index;
@@ -128,22 +128,22 @@ module calibration_module #(
     reg signed [63:0] solver_denom;
     reg signed [63:0] solver_rhs;
 
-    // Scale the matched histogram for the threshold update.
-    // matched_histogram is stored in Q(SOLVER_FRAC_BITS) format.
+    // Convert the Q(SOLVER_FRAC_BITS) solver result to integer before scaling.
 
     genvar scale_idx;
     generate
         for (scale_idx = 0; scale_idx < NUM_HIST;
             scale_idx = scale_idx + 1) begin : gen_scaled_matched_histogram
 
-            assign scaled_matched_histogram[scale_idx] =
-                (matched_histogram[scale_idx] *
-                CAL_CONSTANT_NUM *
-                (64'sd1 <<< (ALGO_DATA_WIDTH - 1))) /
-                (CAL_CONSTANT_DEN * CALIBRATION_LENGTH);
+            assign matched_histogram_integer[scale_idx] =
+                matched_histogram[scale_idx] /
+                (64'sd1 <<< SOLVER_FRAC_BITS);
 
             assign matched_histogram_update[scale_idx] =
-                scaled_matched_histogram[scale_idx] >>> SOLVER_FRAC_BITS;
+                (matched_histogram_integer[scale_idx] *
+                CAL_CONSTANT_NUM *
+                (64'sd1 <<< (DAC_CTRL_WIDTH + DAC_EXTRA_DATA_WIDTH - 1))) /
+                (CAL_CONSTANT_DEN * CALIBRATION_LENGTH);
 
         end
     endgenerate
@@ -274,7 +274,7 @@ module calibration_module #(
                 // reached calibration length: update thresholds based on histogram_diff
                 integer k;
                 signed [EXTRA_WIDTH_FROM_ALGO_TO_DAC+1:0] signed_result;
-                for (k = 0; k < NUM_HIST; k = k + 1) begin
+                for (k = 1; k < NUM_HIST; k = k + 1) begin
                     // Convert the fixed-point solver result back to an integer.
                     signed_result = $signed({1'b0, delta_thresholds_reg[k]}) +
                                     matched_histogram_update[k];

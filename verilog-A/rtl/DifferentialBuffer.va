@@ -1,0 +1,31 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+// Differential buffer with a nonlinear transfer characteristic applied to
+// the differential input voltage.
+module differential_buffer_va(vinp, vinn, voutp, voutn);
+	parameter real a0 = 0.0; // Differential offset coefficient.
+	parameter real a1 = 0.6; // Linear coefficient.
+	parameter real a2 = 0.0; // Quadratic coefficient.
+	parameter real a3 = 0.4; // Cubic coefficient.
+	parameter real vout_cm = 0.0; // Output common-mode voltage.
+
+	input vinp, vinn;
+	output voutp, voutn;
+	electrical vinp, vinn, voutp, voutn;
+
+	real vin_diff_value;
+	real buffer_diff_voltage;
+	real vin_cm_value;
+
+	analog begin
+		vin_cm_value = (V(vinp) + V(vinn)) / 2.0;
+		vin_diff_value = V(vinp) - V(vinn);
+		buffer_diff_voltage = a0 + a1 * vin_diff_value +
+			a2 * vin_diff_value * vin_diff_value +
+			a3 * vin_diff_value * vin_diff_value * vin_diff_value;
+
+		V(voutp) <+ vin_cm_value + buffer_diff_voltage / 2.0;
+		V(voutn) <+ vin_cm_value - buffer_diff_voltage / 2.0;
+	end
+endmodule

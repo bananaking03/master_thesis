@@ -16,20 +16,20 @@ module histogram #(
     logic [HISTOGRAM_DATA_WIDTH-1:0] bin_reg [0:NUM_BINS-1];
     integer i;
 
-    always_ff @(posedge clk or negedge rst_n or posedge reset_bins) begin
+    always_ff @(posedge clk or negedge rst_n or negedge reset_bins) begin
         if (!rst_n) begin
             // Reset histogram data
             for (i = 0; i < NUM_BINS; i = i + 1) begin
                 bin_reg[i] <= '{default: '0};
             end
-        end else if (reset_bins) begin
-            // Clear histogram bins when thresholds are updated
+        end else if (!reset_bins & !clk) begin
+            // Clear immediately and hold the histogram reset while reset_bins is low.
             for (i = 0; i < NUM_BINS; i = i + 1) begin
                 bin_reg[i] <= '{default: '0};
             end
         end else if (acc_en) begin
-            // Accumulate histogram data based on input data
-            bin_reg[data_in] <= bin_reg[data_in] + 1; // Increment the count for the corresponding bin
+            // Accumulate histogram data based on input data.
+            bin_reg[data_in] <= bin_reg[data_in] + 1;
         end
     end
 

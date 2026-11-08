@@ -3,7 +3,7 @@ clear; close all; clc;
 Vhigh = 1;
 Vlow = -1;
 N_bits = 8;
-cal_cycles = 1000000;
+cal_cycles = 100000;
 cal_len = 10000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
@@ -11,7 +11,7 @@ f0 = (13/N)*fs;
 f1 = (15.24532/N)*fs;
 non_lin_parameters = [0 1 0];
 cal_cutoff = 0;
-cal_constant = 0.01;
+cal_constant = 0.1;
 
 L = 2^N_bits;
 LSB = (Vhigh - Vlow) / L;
@@ -53,7 +53,7 @@ for i = 1:num_cases
     [digi_out, SNDRs, last_thresholds] = flash_adc_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
         cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters, lambda_reg, N, analog_in2);
 
-    SNDRs_cases(i) = mean(SNDRs(end:end-500000));
+    SNDRs_cases(i) = mean(SNDRs(end-50000:end));
     SNDRs_cases_max(i) = max(SNDRs);
 
     if max(SNDRs) <= SNDRs(1)

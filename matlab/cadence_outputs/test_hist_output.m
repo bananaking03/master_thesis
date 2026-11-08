@@ -132,9 +132,12 @@ close all;
 
 %% File names
 
-H_plus_file = 'histogram_plus_callen10000_va.csv';
-H_min_file = 'histogram_min_callen10000_va.csv';
-H_matched_file = 'histogram_matched_callen10000_va.csv';
+% H_plus_file = 'histogram_plus_callen10000_va.csv';
+% H_min_file = 'histogram_min_callen10000_va.csv';
+% H_matched_file = 'histogram_matched_callen10000_va.csv';
+H_plus_file = 'histogram_plus_callen10000_dis_va.csv';
+H_min_file = 'histogram_min_callen10000_dis_va.csv';
+H_matched_file = 'histogram_matched_callen10000_dis_va.csv';
 
 %% Read exported SimVision data
 
@@ -142,15 +145,25 @@ H_matched_file = 'histogram_matched_callen10000_va.csv';
 [H_min, timestamps_min] = read_histogram(H_min_file);
 [H_matched, timestamps_matched] = read_histogram(H_matched_file);
 
-H_matched(40) = 0;
-H_matched(162) = 0;
-
 % Select last timestamp
 H_plus = H_plus(end,:);
 H_min = H_min(end,:);
 H_matched = H_matched(end,:);
 
 timestamps = timestamps_plus(end);
+
+%% Remove unrealistic H_matched values
+
+max_valid_value = 1e6;  % Maximum allowed absolute value
+
+% Find values that are too large (positive or negative)
+invalid_idx = abs(double(H_matched)) > max_valid_value;
+
+% Replace them with zero
+H_matched(invalid_idx) = 0;
+
+fprintf('Replaced %d invalid H_matched values with zero.\n', ...
+    nnz(invalid_idx));
 
 %% Calculate histogram difference
 
@@ -168,7 +181,7 @@ H_delta_matched_full = ...
 
 %% Compare H_matched (SimVision) vs H_delta_matched_full (MATLAB)
 
-scale = 1;  % Set to 2^frac_bits if H_matched is fixed-point
+scale = 100;  % Set to 2^frac_bits if H_matched is fixed-point
 
 H_matched_vec = double(H_matched(:)) / scale;
 H_delta_vec = H_delta_matched_full(:);
@@ -227,7 +240,27 @@ linkaxes([ax1 ax2], 'xy');
 
 %% Numerical comparison
 
+%% Numerical comparison (valid bins only)
+
 difference = H_matched_vec - H_delta_vec;
+
+% Exclude bins that contained unrealistic values
+valid_idx = ~invalid_idx(:);
+
+fprintf('\nComparison results (valid bins only):\n');
+
+if any(valid_idx)
+    fprintf('Maximum absolute difference: %g\n', ...
+        max(abs(difference(valid_idx))));
+
+    fprintf('Mean absolute difference:    %g\n', ...
+        mean(abs(difference(valid_idx))));
+
+    fprintf('RMSE:                        %g\n', ...
+        sqrt(mean(difference(valid_idx).^2)));
+else
+    fprintf('No valid bins available for comparison.\n');
+end
 
 fprintf('\nComparison results:\n');
 fprintf('Maximum absolute difference: %g\n', max(abs(difference)));

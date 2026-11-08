@@ -5,7 +5,7 @@ Vlow = -1;
 N_bits =10; % probeer meer bits
 N_bits_algo = 8;
 N_bits_caps = 15; 
-cal_cycles = 100000;
+cal_cycles = 10000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
@@ -14,14 +14,14 @@ LSC = 10^-15; % least signifigant capacitance
 % LSC = 10^-18;
 mismatch_LSC = 0.1;
 % mismatch_LSC = 0;
-non_lin_parameters = [0 0.9 0 0.1];
+non_lin_parameters = [0 0.6 0 0.4];
 % cal_len = 5000000;  % need increase for more bits
 cal_len = 10000;
 % cal_len = 10001
 % N = 2048*2^4; % fft size
 analyze_spesific = 1;
 cal_cutoff = 0;
-lambda_reg = 0.1;
+lambda_reg = 0.01;
 
 save_video = true;
 
@@ -36,6 +36,7 @@ LSB = (Vhigh - Vlow) / L;
 % cal_consts = [10^(-3) 10^(-4) 10^(-5) 10^(-6) 10^(-7) 10^(-8)];
 % cal_consts = logspace(-3, 0, 6)';
 cal_consts = [1*10^-1];
+% cal_consts = [0.1];
 
 to_dB = @(x) 20*log10(abs(x) + eps);  % Safe dB conversion
 

@@ -61,6 +61,16 @@ for i=1:cal_cycles
     H_delta_matched_full = (error_matrix + lambda_reg*eye(L_algo))\H_delta;
     H_delta_matched = H_delta_matched_full(1:L_algo);
 
+%     figure;
+%     b = bar(binCenters(1:end-1), H_delta_matched);   % <-- REMOVED 'hist'
+%     b.FaceColor = 'flat';          % enable per-bar colors
+%     b.CData = repmat([0 0.447 0.741], numel(H_delta_matched), 1);  % default color
+%     b.CData(5,:) = [1 0 0];        % recolor bar #4 red
+% %     b.CData(2,:) = [1 0 0];        % recolor bar #3 red
+%     xlabel('ADC output code');
+%     ylabel('Count');
+%     title('Histogram from H\_delta_matched');
+
     %% update thresholds
     % threshold_update = ((abs(H_delta(1:end-1)) > cal_cutoff) .* (L_tot/(Vhigh-Vlow)) .* cal_constant.*H_delta(1:end-1))./(cal_len);
     threshold_update = ((abs(H_delta_matched(1:end-1)) > cal_cutoff) .* (L_tot/(Vhigh-Vlow)) .* cal_constant.*H_delta_matched(1:end-1))./(cal_len);
