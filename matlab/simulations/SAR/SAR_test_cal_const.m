@@ -4,8 +4,8 @@ Vhigh = 1;
 Vlow = -1;
 N_bits =10; % probeer meer bits
 N_bits_algo = 8;
-N_bits_caps = 15; 
-cal_cycles = 10000;
+N_bits_caps = 14; 
+cal_cycles = 100000;
 N = (2048*2^-3) - 1; % fft size
 fs = 48000;  % coherent sampling
 f0 = (13/N)*fs;
@@ -21,7 +21,7 @@ cal_len = 10000;
 % N = 2048*2^4; % fft size
 analyze_spesific = 1;
 cal_cutoff = 0;
-lambda_reg = 0.01;
+lambda_reg = 0.1;
 
 save_video = true;
 
@@ -86,7 +86,7 @@ for i = 1:num_cases
     %     cal_constant, cal_cutoff, init_thresholds(2:end), pos_thresholds, Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,N, analog_in2);
 
     % Call your calibration function
-    [digi_out, SNDRs,last_thresholds] = SAR_adc_full_un_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
+    [digi_out, SNDRs,last_thresholds, DAC_select] = SAR_adc_full_un_dither_sim_simple(analog_in, cal_len, cal_cycles, ...
         cal_constant, cal_cutoff, init_thresholds(2:end), ...
         Vhigh, Vlow, Vinc, N_bits, non_lin_parameters,lambda_reg, N, analog_in2, pos_thresholds, ...
         L_algo,L_tot,N_bits_extra);
@@ -116,3 +116,50 @@ ylabel('SNDR achieved in last iteration (dB)');
 title('SNDR for each cal constant');
 grid on;
 hold off;
+
+%% extract delta_regs
+delta_regs = zeros(L_algo,1);
+
+delta_regs(1) = DAC_select(1);
+for i=(2:length(DAC_select))
+    delta_regs(i) = DAC_select(i) - DAC_select(i-1);
+end
+
+%% Generate delta_thresholds.hex
+
+% Vector containing the exact number of activated DAC elements
+% Replace this with your actual vector
+dac_count_vector = delta_regs;
+
+% Verilog parameters
+DAC_EXTRA_DATA_WIDTH = 4;
+ALGO_DATA_WIDTH = 8;
+DAC_CTRL_WIDTH = 10;
+
+EXTRA_WIDTH_FROM_ALGO_TO_DAC = ...
+    DAC_EXTRA_DATA_WIDTH + DAC_CTRL_WIDTH - ALGO_DATA_WIDTH;
+
+NUM_HIST = 2^ALGO_DATA_WIDTH;
+
+% Width of delta_thresholds_reg
+REG_WIDTH = EXTRA_WIDTH_FROM_ALGO_TO_DAC + 2;
+
+% Maximum representable value
+MAX_VALUE = 2^REG_WIDTH - 1;
+
+%% Write hexadecimal file
+
+filename = 'delta_thresholds.hex';
+
+fid = fopen(filename, 'w');
+
+assert(fid ~= -1, 'Could not open output file.');
+
+for i = 1:NUM_HIST
+    fprintf(fid, '%03X\n', dac_count_vector(i));
+end
+
+fclose(fid);
+
+fprintf('Generated %s with %d threshold values.\n', ...
+    filename, NUM_HIST);

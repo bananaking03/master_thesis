@@ -1,0 +1,116 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module CDAC_mismatch(Sgnd, Vref, gnd, vout);
+
+    parameter real vlogic_threshold = 0.9;
+    parameter real Rdrive = 1k;
+
+    // Absolute path to mismatch lookup table
+    parameter string mismatch_file = "dac_mismatch_lut.txt";
+
+    input [12:0] Sgnd;
+    inout Vref;
+    inout gnd;
+    inout vout;
+
+    electrical [12:0] Sgnd;
+    electrical Vref;
+    electrical gnd;
+    electrical vout;
+
+    integer dac_code;
+    integer bit_value [0:12];
+
+    real vout_target;
+    real Vsample;
+
+    // DAC lookup table: codes 0 through 8192
+    real dac_levels [0:8192];
+
+    integer i;
+    integer file_handle;
+    integer scan_result;
+
+    genvar bit_idx;
+
+    // Read binary control signals
+    generate
+        for (bit_idx = 0; bit_idx < 13; bit_idx = bit_idx + 1) begin : gen_bits
+
+            analog begin
+                bit_value[bit_idx] =
+                    (V(Sgnd[bit_idx], gnd) > vlogic_threshold) ? 1 : 0;
+            end
+
+        end
+    endgenerate
+
+    analog begin
+
+        // Initialization
+        @(initial_step) begin
+
+            Vsample = V(vout, gnd);
+
+            // Open mismatch lookup table
+            file_handle = $fopen(mismatch_file, "r");
+
+            if (file_handle == 0) begin
+                $strobe("ERROR: Could not open DAC mismatch file: %s",
+                        mismatch_file);
+                $finish;
+            end
+
+            // Read all 8193 DAC levels
+            for (i = 0; i <= 8192; i = i + 1) begin
+
+                scan_result = $fscanf(
+                    file_handle,
+                    "%f",
+                    dac_levels[i]
+                );
+
+                if (scan_result != 1) begin
+                    $strobe("ERROR: Invalid DAC mismatch data at code %d", i);
+                    $finish;
+                end
+
+            end
+
+            $fclose(file_handle);
+
+        end
+
+        // Convert 14-bit binary input to integer
+        dac_code = 0;
+
+        for (i = 0; i < 14; i = i + 1) begin
+            dac_code = dac_code + bit_value[i] * (1 << i);
+        end
+
+        // Limit code to valid DAC range
+        if (dac_code > 8192)
+            dac_code = 8192;
+
+        // Calculate output voltage using mismatch LUT
+        vout_target =
+            Vsample + dac_levels[dac_code] * V(Vref, gnd);
+
+        // Preserve original sampling behaviour
+        if (dac_code == 0) begin
+
+            Vsample = V(vout, gnd);
+
+            I(vout, gnd) <+ 0.0;
+
+        end else begin
+
+            I(vout, gnd) <+
+                (V(vout, gnd) - vout_target) / Rdrive;
+
+        end
+
+    end
+
+endmodule

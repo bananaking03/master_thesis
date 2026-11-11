@@ -1,4 +1,5 @@
 module calibration_module #(
+    parameter THRESHOLD_FILE = "delta_thresholds.hex",
     parameter DAC_EXTRA_DATA_WIDTH = 7,
     parameter ALGO_DATA_WIDTH = 8,
     parameter DAC_CTRL_WIDTH = 10,
@@ -260,6 +261,11 @@ module calibration_module #(
 
     // Registers to store the thresholds
     reg [EXTRA_WIDTH_FROM_ALGO_TO_DAC+1:0] delta_thresholds_reg [0:NUM_HIST-1];
+
+    // Load thresholds from file at simulation start
+    initial begin
+        $readmemh(THRESHOLD_FILE, delta_thresholds_reg);
+    end
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

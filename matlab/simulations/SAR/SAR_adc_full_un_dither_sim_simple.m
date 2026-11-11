@@ -1,10 +1,12 @@
-function [digi_out, SNDRs, thresholds] = SAR_adc_full_un_dither_sim_simple(input, cal_len, cal_cycles, ...
+function [digi_out, SNDRs, thresholds, DAC_select] = SAR_adc_full_un_dither_sim_simple(input, cal_len, cal_cycles, ...
     cal_constant, cal_cutoff, init_thresholds, Vhigh, Vlow,  Vinc, N_bits, non_lin_f,lambda_reg,N, ...
     input_test, pos_thresholds, L_algo, L_tot, N_bits_extra)
 %UNTITLED3 Summary of this function goes here
 %   Detailed explanation goes here
 
 % cal_len = round(cal_len);
+% nonlin_fun1 = @(x) polyval(fliplr(non_lin_f),x);
+% nonlin_fun = @(x) nonlin_fun1(x-1) + 1; % center around 1
 nonlin_fun = @(x) polyval(fliplr(non_lin_f),x);
 SNDRs = zeros(cal_cycles,1);
 thresholds = init_thresholds;

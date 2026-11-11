@@ -1,7 +1,7 @@
 N = 8;
 L = 2^N;
 
-delta_reg_file = 'deltareg_15_dis_va.csv';
+delta_reg_file = 'delta_reg_150_dis_va.csv';
 
 [delta_reg, timestamps] = read_histogram(delta_reg_file);
 
