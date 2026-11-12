@@ -121,8 +121,8 @@ hold off;
 delta_regs = zeros(L_algo,1);
 
 delta_regs(1) = DAC_select(1);
-for i=(2:length(DAC_select))
-    delta_regs(i) = DAC_select(i) - DAC_select(i-1);
+for i=(1:255)
+    delta_regs(i) = DAC_select(i*4+1) - DAC_select((i-1)*4+1);
 end
 
 %% Generate delta_thresholds.hex
@@ -156,8 +156,9 @@ fid = fopen(filename, 'w');
 assert(fid ~= -1, 'Could not open output file.');
 
 for i = 1:NUM_HIST
-    fprintf(fid, '%03X\n', dac_count_vector(i));
+    fprintf(fid, '%03X\n', uint32(dac_count_vector(i)));
 end
+
 
 fclose(fid);
 

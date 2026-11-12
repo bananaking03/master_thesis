@@ -3,7 +3,7 @@
 
 module CDAC_mismatch(Sgnd, Vref, gnd, vout);
 
-    parameter real vlogic_threshold = 0.9;
+    parameter real vlogic_threshold = 0.5;
     parameter real Rdrive = 1k;
 
     // Absolute path to mismatch lookup table
