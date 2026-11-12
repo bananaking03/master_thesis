@@ -156,7 +156,7 @@ fid = fopen(filename, 'w');
 assert(fid ~= -1, 'Could not open output file.');
 
 for i = 1:NUM_HIST
-    fprintf(fid, '%03X\n', uint32(dac_count_vector(i)));
+    fprintf(fid, '%02X\n', uint32(dac_count_vector(i)));
 end
 
 
