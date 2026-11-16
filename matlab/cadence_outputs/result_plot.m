@@ -3,26 +3,92 @@ clc;
 close all;
 
 % Read exported SimVision data H_matched
-data = readtable('results_callen3000.csv', ...
+data = readtable('results_done_matdeltareg_dis_va.csv', ...
     'VariableNamingRule', 'preserve');
 
 %% Parameters
 N_bits = 10;
 
-f0 = 5435051;       % Input frequency (Hz)
+f0 = 10^7;       % Input frequency (Hz)
 Ts = 11e-9;         % Sampling period (s)
 Fs = 1/Ts;          % Sampling frequency (Hz)
 
 % Coherent sampling
-N = 184;            % Number of FFT samples
-k = 11;             % Number of input periods
+N = 1000;            % Number of FFT samples
+k = 110;             % Number of input periods
 
 f0_coherent = k*Fs/N;
+f0 = f0_coherent;
 
 fprintf('Sampling frequency: %.6f MHz\n', Fs/1e6);
 fprintf('Input frequency: %.6f MHz\n', f0/1e6);
 fprintf('Coherent frequency: %.6f MHz\n', f0_coherent/1e6);
 fprintf('Frequency error: %.3f Hz\n', f0-f0_coherent);
+
+%% Generate perfect sine input
+t = (0:N-1)*Ts;
+
+% Full-scale sine wave
+input_signal = (2^(N_bits-1)-1)*sin(2*pi*f0*t);
+
+% Ideal 10-bit quantizer
+outp = round(input_signal);
+
+% Ensure output remains in signed 10-bit range
+outp = max(min(outp, 2^(N_bits-1)-1), -2^(N_bits-1));
+
+%% Time-domain plot
+figure;
+plot(t*1e6, outp, 'o-');
+grid on;
+xlabel('Time (us)');
+ylabel('ADC output (LSB)');
+title('Ideal 10-bit ADC output');
+set(gca, 'Color', 'w');
+set(gcf, 'Color', 'w');
+xlim([1 100])
+
+%% FFT
+Y = fft(outp - mean(outp), N);
+
+P2 = abs(Y).^2/N^2;
+P1 = P2(1:N/2+1);
+P1(2:end-1) = 2*P1(2:end-1);
+
+frequency = (0:N/2)*Fs/N;
+
+%% SNDR calculation
+fundamental_bin = k+1;
+signal_power = P1(fundamental_bin);
+
+% All bins except DC and fundamental
+noise_bins = setdiff(1:length(P1), [1 fundamental_bin]);
+
+noise_power = sum(P1(noise_bins));
+
+SNDR = 10*log10(signal_power/noise_power);
+ENOB = (SNDR-1.76)/6.02;
+
+%% Results
+fprintf('\n========== IDEAL ADC PERFORMANCE ==========\n');
+fprintf('Number of samples: %d\n', N);
+fprintf('Fundamental bin: %d\n', fundamental_bin);
+fprintf('Signal power: %.4f dB\n', 10*log10(signal_power));
+fprintf('Noise and distortion power: %.4f dB\n', ...
+    10*log10(noise_power));
+fprintf('SNDR: %.2f dB\n', SNDR);
+fprintf('ENOB: %.2f bits\n', ENOB);
+
+%% Spectrum plot
+figure;
+plot(frequency/1e6, 10*log10(P1 + eps));
+grid on;
+xlabel('Frequency (MHz)');
+ylabel('Power (dB)');
+title(sprintf('Ideal ADC spectrum - SNDR = %.2f dB', SNDR));
+xlim([0 Fs/2/1e6]);
+set(gca, 'Color', 'w');
+set(gcf, 'Color', 'w');
 
 %% Extract ADC output
 % Column 1: Simulation time (ns)
@@ -122,7 +188,7 @@ exclude_sndr = false(N,1);
 exclude_sndr(1) = true;
 exclude_sndr([k+1, N-k+1]) = true;
 
-noise_distortion_power = sum(power_spectrum(~exclude_sndr));
+noise_distortion_power = sum(P1(~exclude_sndr));
 
 SNDR = 10*log10(signal_power/noise_distortion_power);
 
